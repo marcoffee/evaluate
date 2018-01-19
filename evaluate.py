@@ -35,11 +35,11 @@ def work (worker, tid, data, short = False, quiet = True):
 
     flags = { **flags, **testconfig.fixed }
 
-    # positional arguments
+    # positional arguments and benchmark related flags
     argv = []
 
     if not short:
-        # positional arguments that may create large files
+        # benchmark related flags that may create large files
         argv.extend([])
 
     for f, v in flags.items():
