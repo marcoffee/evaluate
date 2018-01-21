@@ -71,8 +71,8 @@ class LockFile (object):
         raise UnlockedException("Unlocked file.")
 
     def _enable (self):
-        for name, meth in self.__attrs.items():
-            setattr(self, name, meth)
+        for name, method in self.__attrs.items():
+            setattr(self, name, method)
 
     def _disable (self):
         for name in self.__attrs.keys():
@@ -116,10 +116,10 @@ class LockFile (object):
             else:
                 self.__lock_count -= 1
 
-            if self.__lock_count == 0:
+            if self.lock_count == 0:
                 self.force_flush()
-                fcntl.flock(self.fileno(), fcntl.LOCK_UN)
                 self._disable()
+                fcntl.flock(self.fileno(), fcntl.LOCK_UN)
 
             return True
 
@@ -157,8 +157,13 @@ class Deque (object):
     _re_sanitize = re.compile(r"[^a-zA-Z0-9\-]+")
 
     @staticmethod
+    def _encode_one (value):
+        return base64.a85encode(pickle.dumps(value)).decode()
+
+    @staticmethod
     def _decode_one (value):
-        return pickle.loads(base64.a85decode(value.encode("ascii")))
+        iid, val = value
+        return iid, pickle.loads(base64.a85decode(val.encode("ascii")))
 
     @staticmethod
     def _decode (data, slc):
@@ -166,6 +171,10 @@ class Deque (object):
             return [ Deque._decode_one(v) for v in data[slc] ]
 
         return Deque._decode_one(data[slc])
+
+    @staticmethod
+    def _get_mtime (file):
+        return os.stat(file.fileno()).st_mtime_ns
 
     def __init__ (self, name, path = "."):
         path = os.path.realpath(path)
@@ -180,17 +189,18 @@ class Deque (object):
         self.__fname = os.path.join(path, fname)
         self.__file = None
         self.__mtime = None
+        self.__nid = None
         self.__data = None
 
     def __del__ (self):
         self.free()
 
     def __enter__ (self):
-        self.onatomic()
+        self.onatomic(wait = True, recursive = True)
         return self
 
     def __exit__ (self, *_):
-        self.offatomic()
+        self.offatomic(clearall = False)
 
     def __getitem__ (self, pos):
         if isinstance(pos, slice):
@@ -200,9 +210,9 @@ class Deque (object):
 
     def __delitem__ (self, pos):
         if isinstance(pos, slice):
-            self.remove(pos.start, pos.stop, pos.step)
+            self.delete(pos.start, pos.stop, pos.step)
         else:
-            self.remove(pos)
+            self.delete(pos)
 
     def __str__ (self):
         return "Deque({{{}}})".format(", ".join(map(str, self)))
@@ -216,9 +226,7 @@ class Deque (object):
 
     def __iter__ (self):
         self._fetch_list()
-
-        for i in range(len(self.__data)):
-            yield Deque._decode(self.__data, i)
+        yield from map(Deque._decode_one, self.__data)
 
     def _get_file (self):
         if not self.is_atomic:
@@ -228,12 +236,29 @@ class Deque (object):
 
     def _fetch_list (self):
         file = self._get_file()
-        mtime = os.stat(file.fileno()).st_mtime_ns
+        mtime = Deque._get_mtime(file)
 
         if mtime != self.__mtime:
             file.rewind()
-            self.__data = [ x.strip() for x in file ]
+
+            self.__nid = int(file.readline().strip() or 0)
+            self.__data = []
+
+            for x in map(str.strip, file):
+                iid, val = x.split(" ", 1)
+                self.__data.append(( int(iid), val ))
+
             self.__mtime = mtime
+
+    def _commit (self):
+        self.__file.clear()
+        print(self.__nid, file = self.__file)
+
+        if self.__data:
+            print(*map(lambda x: "{} {}".format(x[0], x[1]), self.__data),
+                  sep = "\n", file = self.__file, flush = True)
+
+        self.__mtime = Deque._get_mtime(self.__file)
 
     def free (self):
         self.offatomic(clearall = True)
@@ -244,6 +269,9 @@ class Deque (object):
 
     def offatomic (self, clearall = False):
         if self.is_atomic:
+            if clearall or self.atomic_levels == 1:
+                self._commit()
+
             self.__file.unlock(clearall = clearall)
 
             if not self.__file.locked:
@@ -258,13 +286,11 @@ class Deque (object):
         finally:
             self.offatomic(clearall = False)
 
-    def remove (self, start = 0, stop = _no_stop, step = 1, wait = True):
+    def delete (self, start = 0, stop = _no_stop, step = 1, wait = True):
         one = stop is Deque._no_stop
 
         if one:
             stop = (start + 1) or None
-
-        atomic = self.__file is not None
 
         try:
             self.onatomic(wait = wait, recursive = True)
@@ -272,14 +298,51 @@ class Deque (object):
 
             slc = slice(start, stop, step)
 
-            self.__file.clear()
             del self.__data[slc]
 
-            if self.__data:
-                print(*self.__data,
-                      sep = "\n", file = self.__file, flush = True)
+        finally:
+            self.offatomic(clearall = False)
 
-                self.__mtime = os.stat(self.__file.fileno()).st_mtime_ns
+    def remove (self, *ids, wait = True):
+        ids = set(ids)
+        new_data = []
+
+        try:
+            self.onatomic(wait = wait, recursive = True)
+            self._fetch_list()
+
+            for i, ( iid, val ) in enumerate(self.__data):
+                if iid not in ids:
+                    new_data.append(( iid, val ))
+                    continue
+
+                ids.remove(iid)
+
+                if not ids:
+                    new_data.extend(self.__data[ i + 1 : ])
+                    break
+
+            self.__data = new_data
+
+        finally:
+            self.offatomic(clearall = False)
+
+    def replace (self, *ids_vals, wait = True):
+        ids_vals = dict(ids_vals)
+
+        try:
+            self.onatomic(wait = wait, recursive = True)
+            self._fetch_list()
+
+            for i, ( iid, val ) in enumerate(self.__data):
+                if iid not in ids_vals:
+                    continue
+
+                self.__data[i] = ( iid, Deque._encode_one(ids_vals[iid]) )
+                ids_vals.pop(iid)
+
+                if not ids_vals:
+                    break
 
         finally:
             self.offatomic(clearall = False)
@@ -297,14 +360,7 @@ class Deque (object):
             slc = slice(start, stop, step)
             items = Deque._decode(self.__data, slc)
 
-            self.__file.clear()
             del self.__data[slc]
-
-            if self.__data:
-                print(*self.__data,
-                      sep = "\n", file = self.__file, flush = True)
-
-                self.__mtime = os.stat(self.__file.fileno()).st_mtime_ns
 
             if one:
                 items = items[0] if items else default
@@ -331,18 +387,22 @@ class Deque (object):
         return items
 
     def push (self, *items, wait = True):
-        if not items:
-            return
+        ids = []
 
-        try:
-            self.onatomic(wait = wait, recursive = True)
-            self.__file.seek(0, os.SEEK_END)
+        if items:
+            try:
+                self.onatomic(wait = wait, recursive = True)
+                self._fetch_list()
 
-            print(*maps(items, pickle.dumps, base64.a85encode, bytes.decode),
-                  sep = "\n", file = self.__file, flush = True)
+                ids = list(range(self.__nid, self.__nid + len(items)))
+                self.__nid += len(items)
 
-        finally:
-            self.offatomic(clearall = False)
+                self.__data.extend(zip(ids, map(Deque._encode_one, items)))
+
+            finally:
+                self.offatomic(clearall = False)
+
+        return ids
 
     @property
     def atomic_levels (self):
