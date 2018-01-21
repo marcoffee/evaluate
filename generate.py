@@ -34,15 +34,14 @@ try:
 
             seed = int(flags.pop("seed"))
             dset = flags.pop("dset")
-            expname = tuple(testconfig.sanitize_exp(flags))
+            expe = tuple(testconfig.sanitize_exp(flags))
 
-            tested.setdefault(dset, {}).setdefault(expname, set()).add(seed)
+            tested.setdefault(dset, {}).setdefault(expe, set()).add(seed)
 
 except FileNotFoundError:
     pass
 
 experiments = []
-count_tested = len(tested)
 
 with adeque.Deque(testconfig.deq_name, testconfig.deq_path) as deque:
 
@@ -77,6 +76,9 @@ with adeque.Deque(testconfig.deq_name, testconfig.deq_path) as deque:
 
     print("created", len(experiments), "experiments")
     deque.push(*experiments)
+
+count_tested = sum(len(seeds) for dsets in tested.values()
+                   for seeds in dsets.values())
 
 with open(testconfig.siz_file, "w") as file:
     print(len(experiments) + count_tested, file = file)
