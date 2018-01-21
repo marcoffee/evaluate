@@ -82,8 +82,8 @@ class LockFile (object):
         return self.seek(0, os.SEEK_SET)
 
     def clear (self):
+        self.truncate(0)
         self.rewind()
-        self.truncate()
 
     def force_flush (self):
         self.flush()
@@ -116,7 +116,7 @@ class LockFile (object):
             else:
                 self.__lock_count -= 1
 
-            if self.lock_count == 0:
+            if self.__lock_count == 0:
                 self.force_flush()
                 self._disable()
                 fcntl.flock(self.fileno(), fcntl.LOCK_UN)
