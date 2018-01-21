@@ -3,6 +3,7 @@
 import os
 import time
 import adeque
+import itertools as it
 
 
 class WorkerException (Exception):
@@ -53,14 +54,17 @@ class Worker (object):
         except FileNotFoundError:
             pass
 
-    def work_one (self, func, fkwargs = {}):
-        sid = selected = None
+    def work_one (self, func, max_tasks = 1, fkwargs = {}):
+
+        ids = []
+        tasks = []
 
         with self.__deque:
+
             if len(self.__deque) == 0:
                 return Worker._status_exit
 
-            for i, ( owner, tid, task ) in enumerate(self.__deque):
+            for iid, ( owner, task ) in self.__deque:
                 free = owner is None or owner == self.id
 
                 if not free:
@@ -71,9 +75,6 @@ class Worker (object):
                         lock = adeque.LockFile(fname, "r+")
                         free = lock.trylock()
 
-                        if free:
-                            lock.free()
-
                     except FileNotFoundError:
                         free = True
 
@@ -81,28 +82,25 @@ class Worker (object):
                         lock and lock.free()
 
                 if free:
-                    sid = tid
-                    selected = task
+                    ids.append(iid)
+                    tasks.append(task)
 
-                    self.__deque.remove(i)
-                    self.__deque.push(( self.id, sid, selected ))
+                    if len(ids) >= max_tasks:
+                        break
 
-                    break
-
-            else:
+            if not ids:
                 return Worker._status_wait
 
-        func(self, sid, selected, **fkwargs)
+            self.__deque.remove(*ids)
+            ids = self.__deque.push(*zip(it.repeat(self.id), tasks))
 
-        with self.__deque:
-            for i, ( owner, tid, task ) in enumerate(self.__deque):
-                if tid == sid:
-                    self.__deque.remove(i)
-                    break
+        for iid, task in zip(ids, tasks):
+            func(self, iid, task, **fkwargs)
+            self.__deque.remove(iid)
 
         return Worker._status_next
 
-    def work (self, func, fkwargs = {},
+    def work (self, func, max_tasks = 1, fkwargs = {},
               begin = _no_op, wait = _default_wait, end = _no_op):
         try:
             begin(self)
@@ -111,7 +109,7 @@ class Worker (object):
                 result = Worker._status_none
 
                 with self.__lock:
-                    result = self.work_one(func, fkwargs = fkwargs)
+                    result = self.work_one(func, max_tasks, fkwargs = fkwargs)
 
                 if result == Worker._status_wait:
                     wait(self)
@@ -135,9 +133,7 @@ class Worker (object):
 
 if __name__ == '__main__':
 
-    import random
     import tempfile
-    import itertools as it
     import multiprocessing as mp
 
     def test (dirname):
@@ -158,20 +154,20 @@ if __name__ == '__main__':
             print(worker.id, "is ending")
 
         worker = Worker("worker", dirname)
-        worker.work(work, begin = begin, wait = wait, end = end)
+        worker.work(work, max_tasks = 1, begin = begin, wait = wait, end = end)
 
     dirname = tempfile.mkdtemp()
 
     deque = adeque.Deque("worker", dirname)
     deque.push(*zip(
-        it.repeat(None), it.count(1),
+        it.repeat(None),
         [ 10, 1, 2, 5, 1, 1, 1, 5, 3, 1, 1, 4 ]
     ))
     deque.free()
 
     print("starting test")
 
-    with mp.Pool(3) as p:
-        p.map(test, [ dirname ] * 3)
+    with mp.Pool(4) as p:
+        p.map(test, [ dirname ] * 4)
 
     print("ending test")

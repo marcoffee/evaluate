@@ -8,6 +8,10 @@ import adeque
 import argparse
 
 
+argparser = argparse.ArgumentParser()
+argparser.add_argument("-no-clear", action = "store_false", dest = "clear")
+args = argparser.parse_args()
+
 for _, params, _ in testconfig.tests:
     for p in params:
         if p not in testconfig.default:
@@ -37,29 +41,18 @@ try:
 except FileNotFoundError:
     pass
 
+experiments = []
 count_tested = len(tested)
 
-argparser = argparse.ArgumentParser()
-argparser.add_argument("-no-clear", action = "store_false", dest = "clear")
-args = argparser.parse_args()
-
-deque = adeque.Deque(testconfig.deq_name, testconfig.deq_path)
-experiments = []
-
-with deque:
-    count = 0
+with adeque.Deque(testconfig.deq_name, testconfig.deq_path) as deque:
 
     if args.clear:
         deque.clear()
     else:
         for wid, tid, ( bench, seed, flags ) in deque:
-            count = max(count, tid)
             dset = testconfig.get_name(bench)
             expe = tuple(testconfig.sanitize_exp(flags))
-
             tested.setdefault(dset, {}).setdefault(expe, set()).add(seed)
-
-        count += 1
 
     for benchmark, tests in testconfig.iter_tests():
         dset = testconfig.get_name(benchmark)
@@ -75,7 +68,7 @@ with deque:
             print(expe)
 
             experiments.extend((
-                ( None, len(experiments) + seed, ( benchmark, seed, flags ) )
+                ( None, ( benchmark, seed, flags ) )
                     for seed in range(testconfig.seed_start, testconfig.seed_stop)
                         if seed not in exptest
             ))
