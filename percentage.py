@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import time
 import testconfig
 import collections as cl
@@ -31,6 +32,8 @@ with open("exp-size.txt") as file:
 start_time = time.time()
 first_size = 0
 
+fname = "perc-{}".format(os.getpid())
+
 try:
     while True:
         size = 0
@@ -45,9 +48,11 @@ try:
         per_sec = delta / (time.time() - start_time)
         eta = sec_to_str((count - size) / per_sec) if per_sec else "-"
 
-        print("\033[K\r""{0:.0f}% => {0:.2f}% ({1:.2f} / s) ETA: {2}".format(
-            percentage, per_sec, eta
-        ), end = "")
+        with open(fname, "w") as file:
+            print("{0:.0f}% => {0:.2f}% ({1:.2f} / s) ETA: {2}".format(
+                percentage, per_sec, eta
+            ), file = file)
+
         time.sleep(1)
 
 except KeyboardInterrupt:
