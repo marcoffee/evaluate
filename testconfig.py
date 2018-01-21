@@ -160,6 +160,8 @@ fixed = {
 seed_start = 0 # starting seed
 seed_stop = 30 # stopping seed
 
+max_tasks = 1 # number of tasks taken by each worker
+
 rst_path = "results" # results directory
 plt_path = "plots"   # plots directory
 tre_path = "treated" # treated benchmarks data directory
