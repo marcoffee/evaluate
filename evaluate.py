@@ -30,7 +30,7 @@ def work (worker, tid, data, short = False, quiet = True):
     sed_path = "{}/{}".format(tst_path, seed)
 
     if not quiet:
-        print(worker.id, "got", seed, end = " @ ")
+        print(worker.id, "got", "{}@{}".format(dset, seed), end = " => ")
         print(*map(": ".join, expe), sep = ", ")
 
     flags = { **flags, **testconfig.fixed }
@@ -94,5 +94,7 @@ if __name__ == '__main__':
         testconfig.disable_quiet()
 
     worker.Worker(testconfig.deq_name, testconfig.deq_path).work(
-        work, fkwargs = { "quiet": args.quiet, "short": args.short }
+        work, max_tasks = testconfig.max_tasks, fkwargs = {
+            "quiet": args.quiet, "short": args.short
+        }
     )
