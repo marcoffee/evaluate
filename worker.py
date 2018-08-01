@@ -121,10 +121,11 @@ class worker (object):
                 file.write(config.done)
 
     def work (
-        self, func, *, num_tasks = config.num_tasks,
-        begin = _no_op, wait = _default_wait, end = _no_op,
-        fargs = (), fkwargs = {}, bargs = (), bkwargs = {},
-        wargs = (), wkwargs = {}, eargs = (), ekwargs = {}
+        self, task, *, num_tasks = config.num_tasks,
+        begin = _no_op, fetch = _no_op, wait = _default_wait, end = _no_op,
+        targs = (), tkwargs = {}, bargs = (), bkwargs = {},
+        fargs = (), fkwargs = {}, wargs = (), wkwargs = {},
+        eargs = (), ekwargs = {}
     ):
         lock_path = self.lock_path(self.id)
         alist.mkfile(lock_path)
@@ -143,8 +144,10 @@ class worker (object):
 
                         break
 
+                    fetch(self, indices, *fargs, **fkwargs)
+
                     for pos in indices:
-                        func(self, self.data[pos], pos, *fargs, **fkwargs)
+                        task(self, self.data[pos], pos, *targs, **tkwargs)
                         self.mark_done(pos)
 
             end(self, *eargs, **ekwargs)
