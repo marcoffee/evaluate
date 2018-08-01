@@ -10,7 +10,7 @@ wid_fname = "id"
 dat_fname = "queue"
 don_fname = "done"
 
-use_bytes = 2
+use_bytes = 4
 use_order = "little"
 
 sep_byte = b"\xaa"
