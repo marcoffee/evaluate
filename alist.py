@@ -4,9 +4,10 @@ import flock
 
 
 def mkfile (*names):
-    for fname in names:
-        os.makedirs(os.path.dirname(os.path.realpath(fname)), exist_ok = True)
-        open(fname, "a").close()
+    for fname in map(os.path.realpath, names):
+        if not os.path.exists(fname):
+            os.makedirs(os.path.dirname(fname), exist_ok = True)
+            open(fname, "a").close()
 
 def commit (file):
     file.flush()
