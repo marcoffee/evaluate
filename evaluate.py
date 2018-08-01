@@ -8,6 +8,7 @@ import json
 import queue
 import datetime
 import threading
+import itertools as it
 import collections as cl
 
 import flock
@@ -56,54 +57,57 @@ def async_printer (fname, aqueue):
 
                     alist.commit(log)
 
-def aprint (*args, aqueue, **kwargs):
-    aqueue.put(( args, kwargs ))
-
 def get_ts ():
     return time.strftime(config.ts_format)
 
 def get_rt (val):
     return time.strftime(config.rt_format, time.gmtime(val))
 
+def aprint (*args, aqueue, **kwargs):
+    aqueue.put(( ( "[{}]".format(get_ts()), *args ), kwargs ))
+
 def beautify (data):
-    fmt = "\033[38;5;{}m{}\033[0m".format
+    colors = it.cycle(config.colors)
 
     return " ".join(
-        fmt(config.colors[i % len(config.colors)], config.log_format(k, v))
-            for i, ( k, v ) in enumerate(data)
+        "\033[38;5;{}m{}\033[0m".format(col, txt)
+            for key, val in data
+                for txt, col in zip(config.log_format(key, val), colors) if txt
     )
 
 def begin (worker, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
-    ts_fmt = "[{}]".format
-    aprint(ts_fmt(get_ts()), bold_id, "began", aqueue = log_queue)
+    aprint(bold_id, "began", aqueue = log_queue)
 
-def work (worker, data, pos, *, log_queue):
+def fetch (worker, ids, *, log_queue):
+    bold_id = "\033[1m{}\033[0m".format(worker.id)
+    aprint(bold_id, "recv", *ids, aqueue = log_queue)
+
+def task (worker, data, pos, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     ts_fmt = "[{}]".format
     beau = beautify(data)
     data = cl.OrderedDict(data)
 
-    aprint(ts_fmt(get_ts()), bold_id, "work", beau, aqueue = log_queue)
+    aprint(bold_id, "task", beau, aqueue = log_queue)
 
     start = time.time()
     config.run(worker.id, data, pos)
-    took = "({})".format(get_rt(time.time() - start))
+    runtime = "({})".format(get_rt(time.time() - start))
 
-    aprint(ts_fmt(get_ts()), bold_id, "done", beau, took, aqueue = log_queue)
+    aprint(bold_id, "done", beau, runtime, aqueue = log_queue)
 
 def wait (worker, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     ts_fmt = "[{}]".format
-    wtime = config.wait_time
 
-    aprint(ts_fmt(get_ts()), bold_id, "wait", wtime, "s", aqueue = log_queue)
-    time.sleep(wtime)
+    aprint(bold_id, "wait {}s".format(config.wait_time), aqueue = log_queue)
+    time.sleep(config.wait_time)
 
 def end (worker, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     ts_fmt = "[{}]".format
-    aprint(ts_fmt(get_ts()), bold_id, "end", aqueue = log_queue)
+    aprint(bold_id, "end", aqueue = log_queue)
 
 def main (argv):
     log_queue = queue.Queue()
@@ -116,10 +120,11 @@ def main (argv):
     wrk = worker.worker(config.work_path)
 
     try:
-        wrk.work(work, num_tasks = config.num_tasks,
-                 begin = begin, wait = wait, end = end,
-                 fkwargs = { "log_queue": log_queue },
+        wrk.work(task, num_tasks = config.num_tasks,
+                 begin = begin, fetch = fetch, wait = wait, end = end,
+                 tkwargs = { "log_queue": log_queue },
                  bkwargs = { "log_queue": log_queue },
+                 fkwargs = { "log_queue": log_queue },
                  wkwargs = { "log_queue": log_queue },
                  ekwargs = { "log_queue": log_queue })
 
