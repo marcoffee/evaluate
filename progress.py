@@ -30,11 +30,9 @@ def sec_to_str (sec):
 
     return result
 
-pro_fname = os.path.join(config.work_path, config.pro_fname)
-
 argparser = argparse.ArgumentParser()
 
-argparser.add_argument("-o", dest = "output", default = pro_fname)
+argparser.add_argument("-o", dest = "output", default = config.pro_fname)
 argparser.add_argument("-refresh", type = float, default = 1.0)
 
 def main (argv):
@@ -48,7 +46,7 @@ def main (argv):
     last_print = ""
     last_total = 0
 
-    with open(done_file, "rb") as done, open(args.output, "w") as out:
+    with open(done_file, "rb") as done, open(args.output, "w+") as out:
         with flock.flock(out, block = False):
             mem = mmap.mmap(done.fileno(), 0, access = mmap.ACCESS_READ)
 
@@ -56,7 +54,6 @@ def main (argv):
                 total = os.path.getsize(done_file) // config.one_size
 
                 if total != last_total:
-                    print("changed from", last_total, "to", total)
                     mem.close()
                     mem = mmap.mmap(done.fileno(), 0, access = mmap.ACCESS_READ)
                     last_total = total
@@ -71,8 +68,8 @@ def main (argv):
                 per_sec = delta / (time.time() - start_time)
                 eta = sec_to_str((total - count) / per_sec) if per_sec else "-"
 
-                next_print = "{:.2f}% ({:.2f} / s) ETA: {}".format(
-                    percentage, per_sec, eta
+                next_print = "{} / {} = {:.2f}% ({:.2f} / s) ETA: {}".format(
+                    count, total, percentage, per_sec, eta
                 )
 
                 print_diff = len(last_print) - len(next_print)
@@ -85,7 +82,6 @@ def main (argv):
                 alist.commit(out)
 
                 last_print = next_print
-
                 time.sleep(args.refresh)
 
 if __name__ == "__main__":
