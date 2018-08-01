@@ -4,51 +4,15 @@ import glob
 import subprocess
 import collections as cl
 
+from defines import *
 
-ENABLE = True
-DISABLE = False
-
-def build_params (data):
-    for key, val in data.items():
-        if val is DISABLE:
-            continue
-
-        if key[0] == "-":
-            yield key
-
-        if val is not ENABLE:
-            yield str(val)
-
-use_bytes = 2
-use_order = "little"
-colors = "034", "056", "142", "126", "117", "088", "022", "069", "053", "181"
-
-work_path = "task"
-lock_path = "locks"
-wid_fname = "id"
-dat_fname = "queue"
-don_fname = "done"
-
-sep_byte = b"\xaa"
-free_byte = b"\x00"
-done_byte = b"\xff"
-
-free = free_byte * use_bytes
-done = done_byte * use_bytes
-
-sep_free = sep_byte + free
-sep_done = sep_byte + done
-
-one_size = len(sep_byte) + use_bytes
 
 num_tasks = 15
 wait_time = 10
 
-log_fname = os.path.join(work_path, "log.out")
-pro_fname = os.path.join(work_path, "progress.txt")
-
 ts_format = "%H:%M:%S"
 rt_format = "%H:%M:%S"
+colors = "034", "056", "142", "126", "117", "088", "022", "069", "053", "181"
 
 defaults = (
     ( "param1"      , "a" ),
@@ -56,6 +20,8 @@ defaults = (
     ( "-param3"     , 1.0 ),
     ( "-param4"     , "a 1 1.0" ),
     ( "-param5"     , ENABLE ),
+    ( "-param6"     , "fixed" ),
+    ( "-param7="    , "1" )
 )
 
 tests = [(
@@ -63,13 +29,15 @@ tests = [(
     ( "-param2"     , [ 1, 2, 3, 4, 5 ] ),
     ( "-param3"     , [ 1.0, 1.1, 1.2, 1.3, 1.4 ] ),
     ( "-param4"     , [ "1 2 3", "a b c", "1 a bla" ] ),
-    ( "-param5"     , [ ENABLE, DISABLE ] )
+    ( "-param5"     , [ ENABLE, DISABLE ] ),
+    ( "-param7="    , [ "1", "2", "3" ] ),
 ), (
     ( "param1"      , [ "e", "f", "g", "h" ] ),
     ( "-param2"     , [ 1, 2, 3, 4, 5 ] ),
     ( "-param3"     , [ 1.0, 1.5, 2.0, 2.5, 3.0 ] ),
     ( "-param4"     , [ "1 2 3", "a b c", "1 a bla" ] ),
-    ( "-param5"     , [ ENABLE, DISABLE ] )
+    ( "-param5"     , [ ENABLE, DISABLE ] ),
+    ( "-param7="    , [ "1", "2", "4" ] ),
 )]
 
 def ignore (flags):
@@ -78,18 +46,38 @@ def ignore (flags):
 
     return False
 
-def run (wid, data, pos):
-    print(*build_params(data))
-    time.sleep(0.1)
-
 def preprocess (key, val):
     pass
 
 def log_format (key, val):
-    if val is ENABLE:
-        return key
+    if key[-1] == "=":
+        yield "{}{}".format(key, val)
+
+    elif val is ENABLE:
+        yield key
 
     elif val is DISABLE:
-        return "[{}]".format(key)
+        yield "[{}]".format(key)
 
-    return "{}: {}".format(key, val)
+    else:
+        yield "{}: {}".format(key, val)
+
+def param_format (key, val):
+    if val is not DISABLE:
+        if key[-1] == "=":
+            yield "{}{}".format(key, val)
+
+        else:
+            if key[0] == "-":
+                yield key
+
+            if val is not ENABLE:
+                yield str(val)
+
+def run (wid, data, pos):
+    print(*(
+        param for key, val in data.items()
+            for param in param_format(key, val)
+    ))
+
+    time.sleep(0.1)
