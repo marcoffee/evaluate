@@ -1,6 +1,7 @@
 import os
 import time
 import glob
+import subprocess
 import collections as cl
 
 
@@ -8,19 +9,15 @@ ENABLE = True
 DISABLE = False
 
 def build_params (data):
-    params = []
-
     for key, val in data.items():
         if val is DISABLE:
             continue
 
         if key[0] == "-":
-            params.append(key)
+            yield key
 
         if val is not ENABLE:
-            params.append(str(val))
-
-    return params
+            yield str(val)
 
 use_bytes = 2
 use_order = "little"
@@ -79,7 +76,17 @@ def ignore (flags):
     return False
 
 def run (flags):
-    print(build_params(flags))
+    print(*build_params(flags))
+    time.sleep(1)
 
-def preprocess (key, value):
+def preprocess (key, val):
     pass
+
+def log_format (key, val):
+    if val is ENABLE:
+        return key
+
+    elif val is DISABLE:
+        return "[{}]".format(key)
+
+    return "{} = {}".format(key, val)
