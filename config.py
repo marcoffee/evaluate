@@ -77,7 +77,7 @@ def ignore (flags):
 
 def run (flags):
     print(*build_params(flags))
-    time.sleep(1)
+    time.sleep(0.1)
 
 def preprocess (key, val):
     pass
