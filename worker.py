@@ -66,7 +66,7 @@ class worker (object):
                                     mem[ start + 1 : end ] = self.id_bytes
                                     add = True
 
-                            except alist.LockedException:
+                            except flock.LockedException:
                                 has_work = True
 
                     if add:
@@ -87,6 +87,8 @@ class worker (object):
         with open(done_path, "rb+") as file:
             with flock.flock(file):
                 self.fix_size(file)
+
+            with flock.flock(file, shared = True):
                 work, has_work = self.fetch_work(file, num_tasks)
 
                 if work:

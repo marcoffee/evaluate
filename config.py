@@ -78,7 +78,7 @@ def ignore (flags):
     return False
 
 def run (wid, data, pos):
-    print(*build_params(flags))
+    print(*build_params(data))
     time.sleep(0.1)
 
 def preprocess (key, val):
