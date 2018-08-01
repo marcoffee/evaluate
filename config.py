@@ -23,7 +23,7 @@ use_bytes = 2
 use_order = "little"
 colors = "034", "056", "142", "126", "117", "088", "069", "053", "181", "022"
 
-work_path = "work"
+work_path = "task"
 lock_path = "locks"
 wid_fname = "id"
 dat_fname = "queue"
