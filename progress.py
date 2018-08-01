@@ -42,25 +42,21 @@ def main (argv):
     done_file = os.path.join(config.work_path, config.don_fname)
     start_time = time.time()
     start_size = None
+    mem_access = mmap.ACCESS_READ
 
     last_print = ""
-    last_total = 0
 
     with open(done_file, "rb") as done, open(args.output, "w+") as out:
         with flock.flock(out, block = False):
-            mem = mmap.mmap(done.fileno(), 0, access = mmap.ACCESS_READ)
 
             while True:
+                count = None
+
+                with mmap.mmap(done.fileno(), 0, access = mem_access) as mem:
+                    count = sum(1 for _ in util.iter_done(mem))
+
                 total = os.path.getsize(done_file) // config.one_size
 
-                if total != last_total:
-                    mem.close()
-                    mem = mmap.mmap(done.fileno(), 0, access = mmap.ACCESS_READ)
-                    last_total = total
-
-                    print(start_size, sum(1 for _ in util.iter_done(mem)))
-
-                count = sum(1 for _ in util.iter_done(mem))
                 start_size = start_size or count
                 delta = count - start_size
 
