@@ -47,6 +47,8 @@ wait_time = 10
 log_fname = os.path.join(work_path, "log.out")
 pro_fname = os.path.join(work_path, "progress.txt")
 
+time_format = "%H:%M:%S"
+
 defaults = (
     ( "param1"      , "a" ),
     ( "-param2"     , 1 ),
@@ -89,4 +91,4 @@ def log_format (key, val):
     elif val is DISABLE:
         return "[{}]".format(key)
 
-    return "{} = {}".format(key, val)
+    return "{}: {}".format(key, val)
