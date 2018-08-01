@@ -85,7 +85,7 @@ def work (worker, data, pos, *, log_queue):
     aprint(ts_fmt(get_time()), bold_id, "work", beau, aqueue = log_queue)
 
     start = time.time()
-    config.run(data)
+    config.run(worker.id, data, pos)
     took = "({})".format(get_time(time.gmtime(time.time() - start)))
 
     aprint(ts_fmt(get_time()), bold_id, "done", beau, took, aqueue = log_queue)

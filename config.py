@@ -21,7 +21,7 @@ def build_params (data):
 
 use_bytes = 2
 use_order = "little"
-colors = "034", "056", "142", "126", "117", "088", "069", "053", "181", "022"
+colors = "034", "056", "142", "126", "117", "088", "022", "069", "053", "181"
 
 work_path = "task"
 lock_path = "locks"
@@ -77,7 +77,7 @@ def ignore (flags):
 
     return False
 
-def run (flags):
+def run (wid, data, pos):
     print(*build_params(flags))
     time.sleep(0.1)
 
