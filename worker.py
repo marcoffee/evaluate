@@ -60,16 +60,14 @@ class worker (object):
                         oth_path = self.lock_path(oth)
                         alist.mkfile(oth_path)
 
-                        try:
-                            with open(oth_path, "rb+") as oth_file:
-                                try:
-                                    with flock.flock(oth_file, block = False):
-                                        mem[ start + 1 : end ] = self.id_bytes
-                                        add = True
+                        with open(oth_path, "rb+") as oth_file:
+                            try:
+                                with flock.flock(oth_file, block = False):
+                                    mem[ start + 1 : end ] = self.id_bytes
+                                    add = True
 
-                                except alist.LockedException:
-                                    has_work = True
-                                    pass
+                            except alist.LockedException:
+                                has_work = True
 
                     if add:
                         found.append(( start, end ))
