@@ -42,17 +42,9 @@ def main (argv):
 
     if args.report:
         with open(args.output, "rb") as file:
-            data = file.read(config.use_bytes)
-            count = int.from_bytes(data, config.use_order)
-
-            data = file.read(config.use_bytes)
-            total = int.from_bytes(data, config.use_order)
-
-            data = file.read(config.use_bytes)
-            start_size = int.from_bytes(data, config.use_order)
-
-            data = file.read(struct.calcsize("<d"))
-            start_time = struct.unpack("<d", data)[0]
+            data = file.read(struct.calcsize(config.pro_format))
+            data = struct.unpack(config.pro_format, data)
+            count, total, start_size, start_time = data
 
             delta = count - start_size
 
@@ -101,10 +93,9 @@ def main (argv):
                 start_size = start_size or count
 
                 out.seek(0, os.SEEK_SET)
-                out.write(count.to_bytes(config.use_bytes, config.use_order))
-                out.write(total.to_bytes(config.use_bytes, config.use_order))
-                out.write(start_size.to_bytes(config.use_bytes, config.use_order))
-                out.write(struct.pack("<d", start_time))
+                out.write(struct.pack(
+                    config.pro_format, count, total, start_size, start_time
+                ))
                 alist.commit(out)
 
                 if count == total:
