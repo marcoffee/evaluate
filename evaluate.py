@@ -59,9 +59,11 @@ def async_printer (fname, aqueue):
 def aprint (*args, aqueue, **kwargs):
     aqueue.put(( args, kwargs ))
 
-def get_time (val = None):
-    val = val or time.localtime()
-    return time.strftime(config.time_format, val)
+def get_ts ():
+    return time.strftime(config.ts_format)
+
+def get_rt (val):
+    return time.strftime(config.rt_format, time.gmtime(val))
 
 def beautify (data):
     fmt = "\033[38;5;{}m{}\033[0m".format
@@ -74,7 +76,7 @@ def beautify (data):
 def begin (worker, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     ts_fmt = "[{}]".format
-    aprint(ts_fmt(get_time()), bold_id, "began", aqueue = log_queue)
+    aprint(ts_fmt(get_ts()), bold_id, "began", aqueue = log_queue)
 
 def work (worker, data, pos, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
@@ -82,26 +84,26 @@ def work (worker, data, pos, *, log_queue):
     beau = beautify(data)
     data = cl.OrderedDict(data)
 
-    aprint(ts_fmt(get_time()), bold_id, "work", beau, aqueue = log_queue)
+    aprint(ts_fmt(get_ts()), bold_id, "work", beau, aqueue = log_queue)
 
     start = time.time()
     config.run(worker.id, data, pos)
-    took = "({})".format(get_time(time.gmtime(time.time() - start)))
+    took = "({})".format(get_rt(time.time() - start))
 
-    aprint(ts_fmt(get_time()), bold_id, "done", beau, took, aqueue = log_queue)
+    aprint(ts_fmt(get_ts()), bold_id, "done", beau, took, aqueue = log_queue)
 
 def wait (worker, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     ts_fmt = "[{}]".format
     wtime = config.wait_time
 
-    aprint(ts_fmt(get_time()), bold_id, "wait", wtime, "s", aqueue = log_queue)
+    aprint(ts_fmt(get_ts()), bold_id, "wait", wtime, "s", aqueue = log_queue)
     time.sleep(wtime)
 
 def end (worker, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     ts_fmt = "[{}]".format
-    aprint(ts_fmt(get_time()), bold_id, "end", aqueue = log_queue)
+    aprint(ts_fmt(get_ts()), bold_id, "end", aqueue = log_queue)
 
 def main (argv):
     log_queue = queue.Queue()

@@ -47,7 +47,8 @@ wait_time = 10
 log_fname = os.path.join(work_path, "log.out")
 pro_fname = os.path.join(work_path, "progress.txt")
 
-time_format = "%H:%M:%S"
+ts_format = "%H:%M:%S"
+rt_format = "%H:%M:%S"
 
 defaults = (
     ( "param1"      , "a" ),
