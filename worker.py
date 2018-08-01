@@ -116,9 +116,8 @@ class worker (object):
 
     def mark_done (self, pos):
         with open(self.done_path(), "rb+") as file:
-            with flock.flock(file):
-                file.seek(pos * config.one_size + 1, os.SEEK_SET)
-                file.write(config.done)
+            file.seek(pos * config.one_size + 1, os.SEEK_SET)
+            file.write(config.done)
 
     def work (
         self, task, *, num_tasks = config.num_tasks,
