@@ -1,173 +1,201 @@
 #!/usr/bin/env python3
 
 import os
+import mmap
 import time
-import adeque
-import itertools as it
+
+import alist
+import flock
+import config
+import util
 
 
-class WorkerException (Exception):
+def _default_wait (*_):
+    time.sleep(config.wait_time)
+
+def _no_op (*_):
     pass
 
-def _default_wait (_):
-    time.sleep(10)
+class worker (object):
 
-def _no_op (_):
-    pass
+    __slots__ = [ "id", "data", "folder", "last_edit" ]
 
-class Worker (object):
+    def fix_size (self, file):
+        data_path = self.data_path()
+        mtime = os.path.getmtime(data_path)
 
-    _status_exit = 0
-    _status_wait = 1
-    _status_next = 2
-    _status_none = 3
+        if mtime != self.last_edit:
+            self.data = None
+            self.data = alist.read(data_path)
+            self.last_edit = mtime
 
-    def __init__ (self, deque, path = "."):
-        path = os.path.realpath(path)
-        os.makedirs(path, exist_ok = True)
+        fsize = os.path.getsize(file.name)
+        req_size = config.one_size * len(self.data)
 
-        self.__worker_path = os.path.join(path, "workers")
-        os.makedirs(self.__worker_path, exist_ok = True)
+        if fsize < req_size:
+            file.seek(0, os.SEEK_END)
 
-        self.__id_file = os.path.join(path, "id")
+            for _ in range((req_size - fsize) // config.one_size):
+                file.write(config.sep_free)
 
-        with adeque.LockFile(self.id_file, "a+") as file:
-            file.rewind()
-            self.__id = int(file.readline().strip() or 1)
-            file.clear()
-            print(self.id + 1, file = file, flush = True)
+            alist.commit(file)
 
-        self.__lock_path = os.path.join(self.__worker_path, str(self.id))
-        self.__lock = adeque.LockFile(self.__lock_path, "w")
+    def fetch_work (self, file, num_tasks):
+        found = []
+        has_work = False
 
-        self.__deque = adeque.Deque(deque, path)
+        with mmap.mmap(file.fileno(), 0) as mem:
+            found.extend(util.iter_free(mem, limit = num_tasks))
 
-    def __del__ (self):
-        self.free()
+            for start, end in found:
+                mem[ start + 1 : end ] = self.id_bytes
 
-    def free (self):
-        self.__deque.free()
-        self.__lock.free()
+            if len(found) < num_tasks:
 
-        try:
-            os.remove(self.__lock_path)
-        except FileNotFoundError:
-            pass
+                for start, end in util.iter_work(mem):
+                    oth_bytes = mem[ start + 1 : end ]
+                    oth = int.from_bytes(oth_bytes, config.use_order)
+                    add = oth == self.id
 
-    def work_one (self, func, max_tasks = 1, fkwargs = {}):
+                    if not add:
+                        oth_path = self.lock_path(oth)
 
-        ids = []
-        tasks = []
+                        with open(oth_path, "rb+") as oth_file:
+                            try:
+                                with flock.flock(oth_file, block = False):
+                                    mem[ start + 1 : end ] = self.id_bytes
+                                    add = True
 
-        with self.__deque:
+                            except alist.LockedException:
+                                has_work = True
+                                pass
 
-            if len(self.__deque) == 0:
-                return Worker._status_exit
+                    if add:
+                        found.append(( start, end ))
 
-            for iid, ( owner, task ) in self.__deque:
-                free = owner is None or owner == self.id
+                        if len(found) >= num_tasks:
+                            break
 
-                if not free:
-                    fname = os.path.join(self.__worker_path, str(owner))
-                    lock = None
+        has_work |= bool(found)
+        return [ f[0] // config.one_size for f in found ], has_work
 
-                    try:
-                        lock = adeque.LockFile(fname, "r+")
-                        free = lock.trylock()
+    def get_work (self, num_tasks):
+        done_path = self.done_path()
+        alist.mkfile(done_path)
+        work = []
+        has_work = False
 
-                    except FileNotFoundError:
-                        free = True
+        with open(done_path, "rb+") as file:
+            with flock.flock(file):
+                self.fix_size(file)
+                work, has_work = self.fetch_work(file, num_tasks)
 
-                    finally:
-                        lock and lock.free()
+                if work:
+                    alist.commit(file)
 
-                if free:
-                    ids.append(iid)
-                    tasks.append(task)
+        return work, has_work
 
-                    if len(ids) >= max_tasks:
+    def __init__ (self, folder):
+        self.folder = folder
+        self.last_edit = None
+
+        wid_file = os.path.join(self.folder, config.wid_fname)
+        alist.mkfile(wid_file)
+
+        with open(wid_file, "rb+") as file:
+            with flock.flock(file):
+                file.seek(0, os.SEEK_SET)
+                data = file.read(config.use_bytes)
+                self.id = int.from_bytes(data, config.use_order) + 1
+
+                file.seek(0, os.SEEK_SET)
+                file.write(self.id_bytes)
+
+                alist.commit(file)
+
+    def mark_done (self, pos):
+        with open(self.done_path(), "rb+") as file:
+            with flock.flock(file):
+                file.seek(pos * config.one_size + 1, os.SEEK_SET)
+                file.write(config.done)
+
+    def work (
+        self, func, *, num_tasks = config.num_tasks,
+        begin = _no_op, wait = _default_wait, end = _no_op,
+        fargs = (), fkwargs = {}, bargs = (), bkwargs = {},
+        wargs = (), wkwargs = {}, eargs = (), ekwargs = {}
+    ):
+        lock_path = self.lock_path(self.id)
+        alist.mkfile(lock_path)
+
+        with open(lock_path, "rb+") as file:
+            begin(self, *bargs, **bkwargs)
+
+            with flock.flock(file):
+                while True:
+                    indices, has_work = self.get_work(num_tasks)
+
+                    if not indices:
+                        if has_work:
+                            wait(self, *wargs, **wkwargs)
+                            continue
+
                         break
 
-            if not ids:
-                return Worker._status_wait
+                    for pos in indices:
+                        func(self, self.data[pos], pos, *fargs, **fkwargs)
+                        self.mark_done(pos)
 
-            self.__deque.remove(*ids)
-            ids = self.__deque.push(*zip(it.repeat(self.id), tasks))
+            end(self, *eargs, **ekwargs)
 
-        for iid, task in zip(ids, tasks):
-            func(self, iid, task, **fkwargs)
-            self.__deque.remove(iid)
+    def done_path (self):
+        return os.path.join(self.folder, config.don_fname)
 
-        return Worker._status_next
+    def lock_path (self, wid):
+        return os.path.join(self.folder, config.lock_path, str(wid))
 
-    def work (self, func, max_tasks = 1, fkwargs = {},
-              begin = _no_op, wait = _default_wait, end = _no_op):
-        try:
-            begin(self)
-
-            while True:
-                result = Worker._status_none
-
-                with self.__lock:
-                    result = self.work_one(func, max_tasks, fkwargs = fkwargs)
-
-                if result == Worker._status_wait:
-                    wait(self)
-
-                elif result == Worker._status_exit:
-                    break
-
-                elif result == Worker._status_none:
-                    raise WorkerException("Unable to work or lock file.")
-
-        finally:
-            end(self)
+    def data_path (self):
+        return os.path.join(self.folder, config.dat_fname)
 
     @property
-    def id (self):
-        return self.__id
+    def id_bytes (self):
+        return self.id.to_bytes(config.use_bytes, config.use_order)
 
-    @property
-    def id_file (self):
-        return self.__id_file
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     import tempfile
     import multiprocessing as mp
 
+
+    threads = 100
+
     def test (dirname):
 
-        def work (worker, tid, val):
-            print(worker.id, "got", tid, "=", val)
-            time.sleep(val)
-            print(worker.id, "done", tid)
+        def work (worker, data, pos):
+            print(wrk.id, "got", pos, "=", data)
+            time.sleep((5 * wrk.id) / threads)
+            print(wrk.id, "done", pos)
 
-        def begin (worker):
-            print(worker.id, "is begining")
+        def begin (wrk):
+            print(wrk.id, "is begining")
 
-        def wait (worker):
-            print(worker.id, "is waiting 1s")
+        def wait (wrk):
+            print(wrk.id, "is waiting 1s")
             time.sleep(1)
 
-        def end (worker):
-            print(worker.id, "is ending")
+        def end (wrk):
+            print(wrk.id, "is ending")
 
-        worker = Worker("worker", dirname)
-        worker.work(work, max_tasks = 1, begin = begin, wait = wait, end = end)
+        wrk = worker(dirname)
+        wrk.work(work, num_tasks = 1, begin = begin, wait = wait, end = end)
 
     dirname = tempfile.mkdtemp()
-
-    deque = adeque.Deque("worker", dirname)
-    deque.push(*zip(
-        it.repeat(None),
-        [ 10, 1, 2, 5, 1, 1, 1, 5, 3, 1, 1, 4 ]
-    ))
-    deque.free()
+    alist.write(os.path.join(dirname, "queue"), *range(20))
 
     print("starting test")
 
-    with mp.Pool(4) as p:
-        p.map(test, [ dirname ] * 4)
+    with mp.Pool(threads) as p:
+        p.map(test, [ dirname ] * threads)
 
     print("ending test")

@@ -1,100 +1,116 @@
 #!/usr/bin/env python3
 
 import os
-import time
+import sys
 import math
-import argparse
-import itertools as it
+import time
+import json
+import queue
+import threading
 import collections as cl
-import subprocess as sp
-import testconfig
-import adeque
+
+import flock
+import alist
+import config
 import worker
 
 
-max_dset = max(map(len, map(testconfig.get_name, testconfig.benchmarks)))
-max_seed = math.floor(math.log10(testconfig.seed_stop)) + 1
+def get_many (aqueue, block_first = False):
+    if block_first:
+        yield aqueue.get()
 
-def work (worker, tid, data, short = False, quiet = True):
-    time_point = time.time()
+    while True:
+        try:
+            value = aqueue.get(False)
+            yield value
+        except queue.Empty:
+            break
 
-    bench, seed, flags = data
-    dset = testconfig.get_name(bench)
-    expe = cl.deque(testconfig.sanitize_exp(flags))
+def async_printer (fname, aqueue):
+    if fname == os.devnull:
+        return
 
-    dat_path = "{}/{}".format(testconfig.rst_path, dset)
+    alist.mkfile(fname)
 
-    tst_name = testconfig.get_fname(expe)
+    with open(fname, "r+") as log:
+        stop = False
 
-    tst_path = os.path.join(dat_path, tst_name)
-    sed_path = "{}/{}".format(tst_path, seed)
+        while not stop:
+            buffer = []
 
-    if not quiet:
-        print(worker.id, "got", "{}@{}".format(dset, seed), end = " => ")
-        print(*map(": ".join, expe), sep = ", ")
+            for data in get_many(aqueue, True):
+                stop = data is None
 
-    flags = { **flags, **testconfig.fixed }
+                if stop:
+                    break
 
-    # positional arguments and benchmark related flags
-    argv = []
+                buffer.append(data)
 
-    if not short:
-        # benchmark related flags that may create large files
-        argv.extend([])
+            if buffer:
+                with flock.flock(log):
+                    log.seek(0, os.SEEK_END)
 
-    for f, v in flags.items():
-        if v is testconfig.REMOVE:
-            continue
+                    for args, kwargs in buffer:
+                        print(*args, **kwargs, file = log)
 
-        argv.append(str(f))
+                    alist.commit(log)
 
-        if v is testconfig.ENABLE:
-            continue
+def aprint (*args, aqueue, **kwargs):
+    aqueue.put(( args, kwargs ))
 
-        if not isinstance(v, str) and isinstance(v, cl.Iterable):
-            argv.extend(map(str, v))
+def value_name (val):
+    if val is config.ENABLE:
+        return "<enable>"
 
-        else:
-            argv.append(str(v))
+    elif val is config.DISABLE:
+        return "<disable>"
 
-    os.makedirs(sed_path, exist_ok = True)
+    return str(val)
 
-    # execute your script with argv here
+def beautify (data):
+    fmt = "\033[38;5;{}m{} = {}\033[0m".format
 
-    max_id = worker.id
+    return " ".join(
+        fmt(config.colors[i % len(config.colors)], k, value_name(v))
+            for i, ( k, v ) in enumerate(data)
+    )
+
+def work (worker, data, pos, *, log_queue):
+    beautified = beautify(data)
+    data = cl.OrderedDict(data)
+
+    bold_id = "\033[1m{}\033[0m".format(worker.id)
+
+    aprint(bold_id, "got", beautified, aqueue = log_queue)
+    config.run(data)
+    aprint(bold_id, "done", beautified, aqueue = log_queue)
+
+def wait (worker, *, log_queue):
+    aprint(worker.id, "is waiting", config.wait_time, "s", aqueue = log_queue)
+    time.sleep(config.wait_time)
+
+def main (argv):
+    log_queue = queue.Queue()
+
+    logger = threading.Thread(target = async_printer, kwargs = {
+        "fname": config.log_fname, "aqueue": log_queue
+    })
+
+    logger.start()
+    wrk = worker.worker(config.work_path)
 
     try:
-        with open(worker.id_file, "r") as file:
-            max_id = max(0, int(file.readline().strip() or 1) - 1)
+        wrk.work(work, num_tasks = config.num_tasks, wait = wait,
+                 fkwargs = { "log_queue": log_queue },
+                 wkwargs = { "log_queue": log_queue })
 
-    except FileNotFoundError:
+    except KeyboardInterrupt:
         pass
 
-    max_work = math.floor(math.log10(max_id)) + 1
+    print("ending")
 
-    expe.appendleft(( "seed", "{: >{}d}".format(seed, max_seed) ))
-    expe.appendleft(( "dset", dset.rjust(max_dset) ))
-    expe.appendleft(( "work", "{: >{}d}".format(worker.id, max_work) ))
+    log_queue.put(None)
+    logger.join()
 
-    expe.append(( "end", time.strftime("%Y%m%d.%H%M%S", time.gmtime()) ))
-    expe.append(( "time", "{:.5f}s".format(time.time() - time_point) ))
-
-    with adeque.LockFile(testconfig.tst_file, "a") as file:
-        file.seek(0, os.SEEK_END)
-        print(*map(": ".join, expe), sep = ", ", file = file, flush = True)
-
-argparser = argparse.ArgumentParser()
-argparser.add_argument("-no-quiet", action = "store_false", dest = "quiet")
-argparser.add_argument("-short", action = "store_true")
-
-if __name__ == '__main__':
-    args = argparser.parse_args()
-
-    if not args.quiet:
-        testconfig.disable_quiet()
-
-    worker.Worker(testconfig.deq_name, testconfig.deq_path).work(
-        work, max_tasks = testconfig.max_tasks, fkwargs = {
-            "quiet": args.quiet, "short": args.short
-        }
-    )
+if __name__ == "__main__":
+    main(sys.argv[ 1 : ])

@@ -2,83 +2,106 @@
 
 import os
 import sys
-import subprocess
-import testconfig
-import adeque
 import argparse
+import itertools as it
+import collections as cl
 
+import flock
+import alist
+import config
+
+def iter_values (defaults, tests):
+    unique = {}
+
+    for key, val in defaults.items():
+        unique[key] = { val }
+        yield key, val
+
+    for test in tests:
+        for key, vals in test:
+            for val in vals:
+                if val not in unique[key]:
+                    yield key, val
+
+def iter_params (defaults, tests):
+    unique = set()
+
+    for key, val in defaults.items():
+        unique.add(key)
+        yield key, [ val ]
+
+    for test in tests:
+        for key, vals in test:
+            if key not in unique:
+                yield key, vals
+                unique.add(key)
+
+def iter_tests (defaults, tests, order):
+    key = lambda x: order[x[0]]
+
+    for test in tests:
+        keys = [ key for key, _ in test ]
+        opts = [ opt for _, opt in test ]
+
+        for vals in it.product(*opts):
+            flags = { **defaults, **dict(zip(keys, vals)) }
+            flags = cl.OrderedDict(sorted(flags.items(), key = key))
+
+            if config.ignore(flags):
+                continue
+
+            yield tuple(flags.items())
 
 argparser = argparse.ArgumentParser()
-argparser.add_argument("-no-clear", action = "store_false", dest = "clear")
-args = argparser.parse_args()
+argparser.add_argument("-clear", action = "store_true")
+argparser.add_argument("-no-warnings", action = "store_false", dest = "warnings")
 
-for _, params, _ in testconfig.tests:
-    for p in params:
-        if p not in testconfig.default:
-            raise Exception("{} should have a default value.".format(p))
+def main (argv):
+    args = argparser.parse_args(argv)
 
-tested = {}
+    defaults = cl.OrderedDict(config.defaults)
+    order = { param : i for i, param in enumerate(defaults.keys()) }
 
-try:
-    with open(testconfig.tst_file) as file:
-        for line in file:
-            flags = {}
+    for key, vals in iter_params(defaults, config.tests):
+        if key in defaults:
+            continue
 
-            for line in line.strip().split(",")[ 1 : -2 ]:
-                kv = line.split(":")
+        val = vals[0]
+        pos = len(order)
+        defaults[key] = val
+        order[key] = pos
 
-                if len(kv) > 1:
-                    flags[kv[0].strip()] = kv[1].strip()
-                else:
-                    flags[line.strip()] = testconfig.ENABLE
-
-            seed = int(flags.pop("seed"))
-            dset = flags.pop("dset")
-            expe = tuple(testconfig.sanitize_exp(flags))
-
-            tested.setdefault(dset, {}).setdefault(expe, set()).add(seed)
-
-except FileNotFoundError:
-    pass
-
-experiments = []
-
-with adeque.Deque(testconfig.deq_name, testconfig.deq_path) as deque:
-
-    if args.clear:
-        deque.clear()
-    else:
-        for wid, tid, ( bench, seed, flags ) in deque:
-            dset = testconfig.get_name(bench)
-            expe = tuple(testconfig.sanitize_exp(flags))
-            tested.setdefault(dset, {}).setdefault(expe, set()).add(seed)
-
-    for benchmark, tests in testconfig.iter_tests():
-        dset = testconfig.get_name(benchmark)
-        print(dset)
-
-        # add code here if you need to treat your benchmark before running
-
-        for flags in tests:
-
-            expe = tuple(testconfig.sanitize_exp(flags))
-            exptest = tested.get(dset, {}).get(expe, set())
-
-            print(expe)
-
-            experiments.extend((
-                ( None, ( benchmark, seed, flags ) )
-                    for seed in range(testconfig.seed_start, testconfig.seed_stop)
-                        if seed not in exptest
+        if args.warnings:
+            print("Using `{}` as default and `{}` as order for `{}`.".format(
+                val, pos, key
             ))
 
-        print()
+    for key, val in iter_values(defaults, config.tests):
+        config.preprocess(key, val)
 
-    print("created", len(experiments), "experiments")
-    deque.push(*experiments)
+    dat_fname = os.path.join(config.work_path, config.dat_fname)
+    don_fname = os.path.join(config.work_path, config.don_fname)
 
-count_tested = sum(len(seeds) for dsets in tested.values()
-                   for seeds in dsets.values())
+    alist.mkfile(dat_fname, don_fname)
+    o_type = "wb+" if args.clear else "rb+"
 
-with open(testconfig.siz_file, "w") as file:
-    print(len(experiments) + count_tested, file = file)
+    with open(dat_fname, o_type) as queue, open(don_fname, o_type) as done:
+        with flock.flock(queue), flock.flock(done):
+            exists = set()
+
+            for task in alist.iterate_locked(queue):
+                exists.add(tuple(sorted(task)))
+
+            created = alist.write_locked(queue, *(
+                ts for ts in iter_tests(defaults, config.tests, order)
+                    if tuple(sorted(ts)) not in exists
+            ))
+
+            for _ in range(created):
+                done.seek(0, os.SEEK_END)
+                done.write(config.sep_free)
+
+            print("created", created, "experiments")
+
+if __name__ == "__main__":
+    main(sys.argv[ 1 : ])
