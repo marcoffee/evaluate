@@ -6,6 +6,7 @@ import math
 import time
 import json
 import queue
+import datetime
 import threading
 import collections as cl
 
@@ -58,22 +59,17 @@ def async_printer (fname, aqueue):
 def aprint (*args, aqueue, **kwargs):
     aqueue.put(( args, kwargs ))
 
-def value_name (val):
-    if val is config.ENABLE:
-        return "<enable>"
-
-    elif val is config.DISABLE:
-        return "<disable>"
-
-    return str(val)
-
 def beautify (data):
-    fmt = "\033[38;5;{}m{} = {}\033[0m".format
+    fmt = "\033[38;5;{}m{}\033[0m".format
 
     return " ".join(
-        fmt(config.colors[i % len(config.colors)], k, value_name(v))
+        fmt(config.colors[i % len(config.colors)], config.log_format(k, v))
             for i, ( k, v ) in enumerate(data)
     )
+
+def begin (worker, *, log_queue):
+    bold_id = "\033[1m{}\033[0m".format(worker.id)
+    aprint(bold_id, "begin", aqueue = log_queue)
 
 def work (worker, data, pos, *, log_queue):
     beautified = beautify(data)
@@ -81,12 +77,13 @@ def work (worker, data, pos, *, log_queue):
 
     bold_id = "\033[1m{}\033[0m".format(worker.id)
 
-    aprint(bold_id, "got", beautified, aqueue = log_queue)
+    aprint(bold_id, "got", beautified, "time = {}".format(datetime.datetime.now()), aqueue = log_queue)
     config.run(data)
-    aprint(bold_id, "done", beautified, aqueue = log_queue)
+    aprint(bold_id, "done", beautified, "time = {}".format(datetime.datetime.now()), aqueue = log_queue)
 
 def wait (worker, *, log_queue):
-    aprint(worker.id, "is waiting", config.wait_time, "s", aqueue = log_queue)
+    bold_id = "\033[1m{}\033[0m".format(worker.id)
+    aprint(bold_id, "wait", config.wait_time, "s", aqueue = log_queue)
     time.sleep(config.wait_time)
 
 def main (argv):
@@ -100,8 +97,9 @@ def main (argv):
     wrk = worker.worker(config.work_path)
 
     try:
-        wrk.work(work, num_tasks = config.num_tasks, wait = wait,
+        wrk.work(work, num_tasks = config.num_tasks, begin = begin, wait = wait,
                  fkwargs = { "log_queue": log_queue },
+                 bkwargs = { "log_queue": log_queue },
                  wkwargs = { "log_queue": log_queue })
 
     except KeyboardInterrupt:
