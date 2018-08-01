@@ -51,7 +51,6 @@ class worker (object):
                 mem[ start + 1 : end ] = self.id_bytes
 
             if len(found) < num_tasks:
-
                 for start, end in util.iter_work(mem):
                     oth_bytes = mem[ start + 1 : end ]
                     oth = int.from_bytes(oth_bytes, config.use_order)
@@ -59,16 +58,18 @@ class worker (object):
 
                     if not add:
                         oth_path = self.lock_path(oth)
+                        alist.mkfile(oth_path)
 
-                        with open(oth_path, "rb+") as oth_file:
-                            try:
-                                with flock.flock(oth_file, block = False):
-                                    mem[ start + 1 : end ] = self.id_bytes
-                                    add = True
+                        try:
+                            with open(oth_path, "rb+") as oth_file:
+                                try:
+                                    with flock.flock(oth_file, block = False):
+                                        mem[ start + 1 : end ] = self.id_bytes
+                                        add = True
 
-                            except alist.LockedException:
-                                has_work = True
-                                pass
+                                except alist.LockedException:
+                                    has_work = True
+                                    pass
 
                     if add:
                         found.append(( start, end ))
