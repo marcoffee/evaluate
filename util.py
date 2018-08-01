@@ -4,11 +4,8 @@ import math
 import config
 
 
-use_bytes_bytes = bytes(str(config.use_bytes), "ascii")
-
 re_work = re.compile(
-    config.sep_byte + b"(?!" + config.done_byte + b"{" +
-    use_bytes_bytes + b"}).{" + use_bytes_bytes + b"}"
+    config.sep_byte + b"(?!" + config.done + b")" + (b"." * config.use_bytes)
 )
 
 def next_bytes (mem, byt, start = 0, end = None):
