@@ -27,4 +27,4 @@ sep_done = sep_byte + done
 one_size = len(sep_byte) + use_bytes
 
 log_fname = os.path.join(work_path, "log.out")
-pro_fname = os.path.join(work_path, "progress.txt")
+pro_fname = os.path.join(work_path, "progress.bin")
