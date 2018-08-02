@@ -54,6 +54,7 @@ def iter_tests (defaults, tests, order):
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument("-clear", action = "store_true")
+argparser.add_argument("-release-tasks", action = "store_true")
 argparser.add_argument("-no-warnings", action = "store_false", dest = "warnings")
 
 def main (argv):
@@ -100,6 +101,13 @@ def main (argv):
             for _ in range(created):
                 done.seek(0, os.SEEK_END)
                 done.write(config.sep_free)
+
+            if not args.clear and args.release_tasks:
+                done.seek(0, os.SEEK_SET)
+
+                with mmap.mmap(done.fileno(), 0) as mem:
+                    for s, e in util.iter_work(mem):
+                        mem[ s : e ] = config.sep_free
 
             print("created", created, "experiments")
 
