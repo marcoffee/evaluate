@@ -79,20 +79,24 @@ def begin (worker, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     aprint(bold_id, "began", aqueue = log_queue)
 
-def color_reason (rea):
+def write_reason (tid, rea, rid):
+    fmt = ""
+
     if rea == "free":
-        return config.recv_free
+        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_free)
 
-    if rea == "mine":
-        return config.recv_mine
+    elif rea == "mine":
+        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_mine)
 
-    return config.recv_dead
+    else:
+        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_dead)
+
+    return fmt.format(tid, rid)
 
 def fetch (worker, ids, reason, *, log_queue):
     bold_id = "\033[1m{}\033[0m".format(worker.id)
     aprint(bold_id, "recv", *(
-        "\033[38;5;{}m{}\033[0m".format(color_reason(rea), i)
-            for i, rea in zip(ids, reason)
+        write_reason(tid, rea, rid) for tid, ( rea, rid ) in zip(ids, reason)
     ), aqueue = log_queue)
 
 def task (worker, data, pos, *, log_queue):
