@@ -21,9 +21,9 @@ def iterate_locked (file):
         except EOFError:
             break
 
-def iterate (fname):
+def iterate (fname, shared = True):
     with open(fname, "rb") as file:
-        with flock.flock(file, True):
+        with flock.flock(file, shared = shared):
             yield from iterate_locked(file)
 
 def read_locked (file):
@@ -38,11 +38,11 @@ def read_locked (file):
 
     return result
 
-def read (fname):
+def read (fname, shared = True):
     result = None
 
     with open(fname, "rb") as file:
-        with flock.flock(file, True):
+        with flock.flock(file, shared = shared):
             file.seek(0, os.SEEK_SET)
             result = read_locked(file)
 
