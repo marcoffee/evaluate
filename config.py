@@ -14,6 +14,10 @@ ts_format = "%H:%M:%S"
 rt_format = "%H:%M:%S"
 colors = "034", "056", "142", "126", "117", "088", "022", "069", "053", "181"
 
+recv_free = "070"
+recv_mine = "178"
+recv_dead = "124"
+
 defaults = (
     ( "param1"      , "a" ),
     ( "-param2"     , 1 ),
@@ -25,7 +29,7 @@ defaults = (
 )
 
 tests = [(
-    ( "param1"      , [ "a", "b", "c", "d" ] ),
+    ( "param1"      , [ "a", "b", "c", "d", "e" ] ),
     ( "-param2"     , [ 1, 2, 3, 4, 5 ] ),
     ( "-param3"     , [ 1.0, 1.1, 1.2, 1.3, 1.4 ] ),
     ( "-param4"     , [ "1 2 3", "a b c", "1 a bla" ] ),

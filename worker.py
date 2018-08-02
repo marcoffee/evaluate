@@ -42,10 +42,12 @@ class worker (object):
 
     def fetch_work (self, file, num_tasks):
         found = []
+        reason = []
         has_work = False
 
         with mmap.mmap(file.fileno(), 0) as mem:
             found.extend(util.iter_free(mem, limit = num_tasks))
+            reason = [ "free" ] * len(found)
 
             for start, end in found:
                 mem[ start + 1 : end ] = self.id_bytes
@@ -55,6 +57,7 @@ class worker (object):
                     oth_bytes = mem[ start + 1 : end ]
                     oth = int.from_bytes(oth_bytes, config.use_order)
                     add = oth == self.id
+                    rea = "mine"
 
                     if not add:
                         oth_path = self.lock_path(oth)
@@ -65,18 +68,20 @@ class worker (object):
                                 with flock.flock(oth_file, block = False):
                                     mem[ start + 1 : end ] = self.id_bytes
                                     add = True
+                                    rea = "dead"
 
                             except flock.LockedException:
                                 has_work = True
 
                     if add:
                         found.append(( start, end ))
+                        reason.append(rea)
 
                         if len(found) >= num_tasks:
                             break
 
         has_work |= bool(found)
-        return [ f[0] // config.one_size for f in found ], has_work
+        return [ f[0] // config.one_size for f in found ], reason, has_work
 
     def get_work (self, num_tasks):
         done_path = self.done_path()
@@ -89,12 +94,12 @@ class worker (object):
                 self.fix_size(file)
 
             with flock.flock(file, shared = True):
-                work, has_work = self.fetch_work(file, num_tasks)
+                work, reason, has_work = self.fetch_work(file, num_tasks)
 
                 if work:
                     alist.commit(file)
 
-        return work, has_work
+        return work, reason, has_work
 
     def __init__ (self, folder):
         self.folder = folder
@@ -134,7 +139,7 @@ class worker (object):
 
             with flock.flock(file):
                 while True:
-                    indices, has_work = self.get_work(num_tasks)
+                    indices, reason, has_work = self.get_work(num_tasks)
 
                     if not indices:
                         if has_work:
@@ -143,7 +148,7 @@ class worker (object):
 
                         break
 
-                    fetch(self, indices, *fargs, **fkwargs)
+                    fetch(self, indices, reason, *fargs, **fkwargs)
 
                     for pos in indices:
                         task(self, self.data[pos], pos, *targs, **tkwargs)
