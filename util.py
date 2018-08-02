@@ -5,7 +5,8 @@ import config
 
 
 re_work = re.compile(
-    config.sep_byte + b"(?!" + config.done + b")" + (b"." * config.use_bytes)
+    config.sep_byte + b"(?!" + config.done + b")" + (b"." * config.use_bytes),
+    re.S
 )
 
 def next_bytes (mem, byt, start = 0, end = None):
