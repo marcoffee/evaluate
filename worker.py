@@ -47,7 +47,7 @@ class worker (object):
 
         with mmap.mmap(file.fileno(), 0) as mem:
             found.extend(util.iter_free(mem, limit = num_tasks))
-            reason = [ "free" ] * len(found)
+            reason = [ ( "free", 0 ) ] * len(found)
 
             for start, end in found:
                 mem[ start + 1 : end ] = self.id_bytes
@@ -75,7 +75,7 @@ class worker (object):
 
                     if add:
                         found.append(( start, end ))
-                        reason.append(rea)
+                        reason.append(( rea, oth ))
 
                         if len(found) >= num_tasks:
                             break
@@ -93,7 +93,6 @@ class worker (object):
             with flock.flock(file):
                 self.fix_size(file)
 
-            with flock.flock(file, shared = True):
                 work, reason, has_work = self.fetch_work(file, num_tasks)
 
                 if work:
