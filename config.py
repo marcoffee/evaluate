@@ -7,8 +7,16 @@ import collections as cl
 from defines import *
 
 
-num_tasks = 15
-wait_time = 10
+set_task_path("task")
+
+num_tasks = 50
+time_wait = 15
+time_starve = 15
+
+max_busy = 5
+max_recv = 5
+
+unique_busy = True
 
 ts_format = "%H:%M:%S"
 rt_format = "%H:%M:%S"
@@ -18,30 +26,30 @@ recv_free = "070"
 recv_mine = "178"
 recv_dead = "124"
 
-defaults = (
-    ( "param1"      , "a" ),
-    ( "-param2"     , 1 ),
-    ( "-param3"     , 1.0 ),
-    ( "-param4"     , "a 1 1.0" ),
-    ( "-param5"     , ENABLE ),
-    ( "-param6"     , "fixed" ),
-    ( "-param7="    , "1" )
-)
+defaults = [
+    ( "param1"   , "a" ),
+    ( "-param2"  , 1 ),
+    ( "-param3"  , 1.0 ),
+    ( "-param4"  , "a 1 1.0" ),
+    ( "-param5"  , ENABLE ),
+    ( "-param6"  , "fixed" ),
+    ( "-param7=" , "1" )
+]
 
 tests = [(
-    ( "param1"      , [ "a", "b", "c", "d", "e" ] ),
-    ( "-param2"     , [ 1, 2, 3, 4, 5 ] ),
-    ( "-param3"     , [ 1.0, 1.1, 1.2, 1.3, 1.4 ] ),
-    ( "-param4"     , [ "1 2 3", "a b c", "1 a bla" ] ),
-    ( "-param5"     , [ ENABLE, DISABLE ] ),
-    ( "-param7="    , [ "1", "2", "3" ] ),
+    ( "param1"   , [ "a", "b", "c", "d", "e" ] ),
+    ( "-param2"  , [ 1, 2, 3, 4, 5 ] ),
+    ( "-param3"  , [ 1.0, 1.1, 1.2, 1.3, 1.4 ] ),
+    ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
+    ( "-param5"  , [ ENABLE, DISABLE ] ),
+    ( "-param7=" , [ "1", "2", "3" ] ),
 ), (
-    ( "param1"      , [ "e", "f", "g", "h" ] ),
-    ( "-param2"     , [ 1, 2, 3, 4, 5 ] ),
-    ( "-param3"     , [ 1.0, 1.5, 2.0, 2.5, 3.0 ] ),
-    ( "-param4"     , [ "1 2 3", "a b c", "1 a bla" ] ),
-    ( "-param5"     , [ ENABLE, DISABLE ] ),
-    ( "-param7="    , [ "1", "2", "4" ] ),
+    ( "param1"   , [ "e", "f", "g", "h" ] ),
+    ( "-param2"  , [ 1, 2, 3, 4, 5 ] ),
+    ( "-param3"  , [ 1.0, 1.5, 2.0, 2.5, 3.0 ] ),
+    ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
+    ( "-param5"  , [ ENABLE, DISABLE ] ),
+    ( "-param7=" , [ "1", "2", "4" ] ),
 )]
 
 def ignore (flags):

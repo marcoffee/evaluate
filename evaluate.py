@@ -4,7 +4,6 @@ import os
 import sys
 import math
 import time
-import json
 import queue
 import datetime
 import threading
@@ -58,13 +57,16 @@ def async_printer (fname, aqueue):
                     alist.commit(log)
 
 def get_ts ():
-    return time.strftime(config.ts_format)
+    return datetime.datetime.now().strftime(config.ts_format)
 
 def get_rt (val):
-    return time.strftime(config.rt_format, time.gmtime(val))
+    return datetime.datetime.utcfromtimestamp(val).strftime(config.rt_format)
 
-def aprint (*args, aqueue, **kwargs):
-    aqueue.put(( ( "[{}]".format(get_ts()), *args ), kwargs ))
+def aprint (*args, aqueue, ts = True, **kwargs):
+    if ts:
+        args = ( "[{}]".format(get_ts()), *args )
+
+    aqueue.put(( args, kwargs ))
 
 def beautify (data):
     colors = it.cycle(config.colors)
@@ -75,81 +77,120 @@ def beautify (data):
                 for txt, col in zip(config.log_format(key, val), colors) if txt
     )
 
-def begin (worker, *, log_queue):
-    bold_id = "\033[1m{}\033[0m".format(worker.id)
-    aprint(bold_id, "began", aqueue = log_queue)
+def bold (txt):
+    return "\033[1m{}\033[0m".format(txt)
 
-def write_reason (tid, rea, rid):
+def format_reason (tid, rea, rid):
     fmt = ""
 
     if rea == "free":
-        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_free)
+        fmt = "\033[38;5;{}m{{0}}\033[0m".format(config.recv_free)
 
     elif rea == "mine":
-        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_mine)
+        fmt = "\033[38;5;{}m{{0}}\033[0m".format(config.recv_mine)
 
     else:
-        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_dead)
+        fmt = "{{1}} <- \033[38;5;{}m{{0}}\033[0m".format(config.recv_dead)
 
-    return fmt.format(tid, rid)
+    return fmt.format(tid, bold(rid))
 
-def fetch (worker, ids, reason, *, log_queue):
-    bold_id = "\033[1m{}\033[0m".format(worker.id)
-    aprint(bold_id, "recv", *(
-        write_reason(tid, rea, rid) for tid, ( rea, rid ) in zip(ids, reason)
-    ), aqueue = log_queue)
+def begin (worker, *, aqueue):
+    bold_id = bold(worker.id)
+    aprint(bold_id, "began", aqueue = aqueue)
 
-def task (worker, data, pos, *, log_queue):
-    bold_id = "\033[1m{}\033[0m".format(worker.id)
-    ts_fmt = "[{}]".format
+def starve (worker, amount, *, aqueue):
+    bold_id = bold(worker.id)
+    aprint(bold_id, "is starving", "#{}".format(amount), aqueue = aqueue)
+
+def fetch (worker, ids, reason, *, aqueue):
+    bold_id = bold(worker.id)
+    printed = []
+
+    aprint(bold_id, "recv", aqueue = aqueue, end = " ")
+
+    for tid, ( rea, rid ) in zip(ids, reason):
+        printed.append(format_reason(tid, rea, rid))
+
+        if len(printed) >= config.max_recv:
+            break
+
+    aprint(*printed, ts = False, sep = ", ", aqueue = aqueue, end = " ")
+
+    if len(ids) > len(printed):
+        diff = "... +{}".format(len(ids) - len(printed))
+        aprint(diff, "tasks", ts = False, aqueue = aqueue, end = "")
+
+    aprint(ts = False, aqueue = aqueue)
+
+def task (worker, data, pos, *, aqueue):
+    bold_id = bold(worker.id)
     beau = beautify(data)
     data = cl.OrderedDict(data)
 
-    aprint(bold_id, "task", beau, aqueue = log_queue)
+    aprint(bold_id, "task", pos, "=>", beau, aqueue = aqueue)
 
     start = time.time()
     config.run(worker.id, data, pos)
     runtime = "({})".format(get_rt(time.time() - start))
 
-    aprint(bold_id, "done", beau, runtime, aqueue = log_queue)
+    aprint(bold_id, "done", pos, "=>", beau, runtime, aqueue = aqueue)
 
-def wait (worker, *, log_queue):
-    bold_id = "\033[1m{}\033[0m".format(worker.id)
-    ts_fmt = "[{}]".format
+def wait (worker, busy, *, aqueue):
+    bold_id = bold(worker.id)
+    printed = []
+    unique = set()
 
-    aprint(bold_id, "wait {}s".format(config.wait_time), aqueue = log_queue)
-    time.sleep(config.wait_time)
+    aprint(bold_id, "wait", "{}s:".format(config.time_wait),
+           "found", aqueue = aqueue, end = " ")
 
-def end (worker, *, log_queue):
-    bold_id = "\033[1m{}\033[0m".format(worker.id)
-    ts_fmt = "[{}]".format
-    aprint(bold_id, "end", aqueue = log_queue)
+    for bid, wid in busy:
+        if not config.unique_busy or wid not in unique:
+            printed.append("{} <- {}".format(bold(wid), bid))
+            unique.add(wid)
+
+            if len(printed) >= config.max_busy:
+                break
+
+    aprint(*printed, ts = False, aqueue = aqueue, end = " ", sep = ", ")
+
+    if len(busy) > len(printed):
+        diff = "... +{}".format(len(busy) - len(printed))
+        aprint(diff, ts = False, aqueue = aqueue, end = " ")
+
+    aprint("busy", ts = False, aqueue = aqueue)
+    time.sleep(config.time_wait)
+
+def end (worker, *, aqueue):
+    bold_id = bold(worker.id)
+    aprint(bold_id, "end", aqueue = aqueue)
 
 def main (argv):
-    log_queue = queue.Queue()
+    aqueue = queue.Queue()
 
     logger = threading.Thread(target = async_printer, kwargs = {
-        "fname": config.log_fname, "aqueue": log_queue
+        "fname": config.files.log, "aqueue": aqueue
     })
 
     logger.start()
-    wrk = worker.worker(config.work_path)
+    wrk = worker.worker()
 
     try:
         wrk.work(task, num_tasks = config.num_tasks,
-                 begin = begin, fetch = fetch, wait = wait, end = end,
-                 tkwargs = { "log_queue": log_queue },
-                 bkwargs = { "log_queue": log_queue },
-                 fkwargs = { "log_queue": log_queue },
-                 wkwargs = { "log_queue": log_queue },
-                 ekwargs = { "log_queue": log_queue })
+                 begin = begin, starve = starve,
+                 fetch = fetch, wait = wait, end = end,
+                 tkwargs = { "aqueue": aqueue },
+                 bkwargs = { "aqueue": aqueue },
+                 skwargs = { "aqueue": aqueue },
+                 fkwargs = { "aqueue": aqueue },
+                 wkwargs = { "aqueue": aqueue },
+                 ekwargs = { "aqueue": aqueue })
 
     except KeyboardInterrupt:
         pass
 
     print("ending")
 
-    log_queue.put(None)
+    aqueue.put(None)
     logger.join()
 
 if __name__ == "__main__":

@@ -7,12 +7,16 @@ class LockedException (Exception):
 class flock (object):
     __slots__ = [ "file", "shared", "locked", "block" ]
 
-    def lock (self):
-        fcntl.flock(self.file, fcntl.LOCK_SH if self.shared else fcntl.LOCK_EX)
+    def lock (self, *, shared = None):
+        shared = self.shared if shared is None else shared
+        flg = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+
+        fcntl.flock(self.file, flg)
         self.locked = True
 
-    def try_lock (self, throw = False):
-        flg = fcntl.LOCK_SH if self.shared else fcntl.LOCK_EX
+    def try_lock (self, *, shared = None, throw = False):
+        shared = self.shared if shared is None else shared
+        flg = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
 
         try:
             fcntl.flock(self.file, flg | fcntl.LOCK_NB)
@@ -40,7 +44,7 @@ class flock (object):
         self.unlock()
 
     def __enter__ (self, *_):
-        self.lock() if self.block else self.try_lock(True)
+        self.lock() if self.block else self.try_lock(throw = True)
 
     def __exit__ (self, *_):
         self.unlock()

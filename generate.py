@@ -63,30 +63,32 @@ def main (argv):
     defaults = cl.OrderedDict(config.defaults)
     order = { param : i for i, param in enumerate(defaults.keys()) }
 
-    for key, vals in iter_params(defaults, config.tests):
+    for key, _ in iter_params(defaults, config.tests):
         if key in defaults:
             continue
 
-        val = vals[0]
         pos = len(order)
-        defaults[key] = val
+        defaults[key] = DISABLE
         order[key] = pos
 
         if args.warnings:
-            print("Using `{}` as default and `{}` as order for `{}`.".format(
-                val, pos, key
-            ))
+            warn = "Using DISABLE as default and `{}` as order for `{}`."
+            print(warn.format(pos, key))
 
     for key, val in iter_values(defaults, config.tests):
         config.preprocess(key, val)
 
-    dat_fname = os.path.join(config.work_path, config.dat_fname)
-    don_fname = os.path.join(config.work_path, config.don_fname)
+    os.makedirs(config.paths.task, exist_ok = True)
+    os.makedirs(config.paths.lock, exist_ok = True)
 
-    alist.mkfile(dat_fname, don_fname)
+    alist.mkfile(config.files.wid, config.files.done,
+                 config.files.data, config.files.log)
+
     o_type = "wb+" if args.clear else "rb+"
 
-    with open(dat_fname, o_type) as queue, open(don_fname, o_type) as done:
+    with open(config.files.data, o_type) as queue, \
+         open(config.files.done, o_type) as done:
+
         with flock.flock(queue), flock.flock(done):
             exists = set()
 

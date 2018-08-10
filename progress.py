@@ -33,15 +33,17 @@ def sec_to_str (sec):
 
 argparser = argparse.ArgumentParser()
 
-argparser.add_argument("-o", dest = "output", default = config.pro_fname)
 argparser.add_argument("-refresh", type = float, default = 1.0)
 argparser.add_argument("-report", action = "store_true")
+argparser.add_argument("-no-print", action = "store_false", dest = "print")
 
 def main (argv):
     args = argparser.parse_args(argv)
 
     if args.report:
-        with open(args.output, "rb") as file:
+        out = ""
+
+        with open(config.files.progress, "rb") as file:
             data = file.read(struct.calcsize(config.pro_format))
             data = struct.unpack(config.pro_format, data)
             count, total, start_size, start_time = data
@@ -52,56 +54,64 @@ def main (argv):
             per_sec = delta / (time.time() - start_time)
             eta = sec_to_str((total - count) / per_sec) if per_sec else "-"
 
-            print("{} / {} = {:.2f}%".format(count, total, perc), end = " ")
+            out = "{} / {} = {:.2f}% ".format(count, total, perc)
 
             if count != total:
-                print("({:.2f} / s) ETA: {}".format(per_sec, eta))
+                out += "({:.2f} / s) ETA: {}".format(per_sec, eta)
             else:
-                print("\033[1mdone\033[0m")
+                out += "\033[1mdone\033[0m"
 
-            return
+            if args.print:
+                print(out)
 
-    done_file = os.path.join(config.work_path, config.don_fname)
+        return out
+
     start_time = time.time()
     mem_access = mmap.ACCESS_READ
     start_size = 0
     first_work = 0
 
-    with open(done_file, "rb") as done, open(args.output, "wb+") as out:
-        with flock.flock(out, block = False):
+    with open(config.files.done, "rb") as done, \
+         open(config.files.progress, "wb+") as prog:
 
-            while True:
-                count = first_work // config.one_size
-                fsize = os.path.getsize(done_file)
-                total = fsize // config.one_size
+        with flock.flock(prog, block = False):
+            try:
+                while True:
+                    count = first_work // config.one_size
+                    fsize = os.path.getsize(config.files.done)
+                    total = fsize // config.one_size
+                    done_fn = done.fileno()
 
-                with mmap.mmap(done.fileno(), 0, access = mem_access) as mem:
-                    prev = first_work
-                    found_work = False
+                    with mmap.mmap(done_fn, 0, access = mem_access) as mem:
+                        prev = first_work
+                        found_work = False
 
-                    for s, e in util.iter_done(mem, start = first_work):
-                        count += 1
-
-                        if not found_work:
-                            found_work = prev != s
+                        for s, e in util.iter_done(mem, start = first_work):
+                            count += 1
 
                             if not found_work:
-                                prev = e
+                                found_work = prev != s
 
-                    first_work = prev
+                                if not found_work:
+                                    prev = e
 
-                start_size = start_size or count
+                        first_work = prev
 
-                out.seek(0, os.SEEK_SET)
-                out.write(struct.pack(
-                    config.pro_format, count, total, start_size, start_time
-                ))
-                alist.commit(out)
+                    start_size = start_size or count
 
-                if count == total:
-                    break
+                    prog.seek(0, os.SEEK_SET)
+                    prog.write(struct.pack(
+                        config.pro_format, count, total, start_size, start_time
+                    ))
+                    alist.commit(prog)
 
-                time.sleep(args.refresh)
+                    if count == total:
+                        break
+
+                    time.sleep(args.refresh)
+
+            except KeyboardInterrupt:
+                pass
 
 if __name__ == "__main__":
     main(sys.argv[ 1 : ])

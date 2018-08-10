@@ -7,26 +7,26 @@ import time
 import alist
 import flock
 import config
+import starvation
 import util
 
 
 def _default_wait (*_):
-    time.sleep(config.wait_time)
+    time.sleep(config.time_wait)
 
 def _no_op (*_):
     pass
 
 class worker (object):
 
-    __slots__ = [ "id", "data", "folder", "last_edit" ]
+    __slots__ = [ "id", "data", "last_edit" ]
 
     def fix_size (self, file):
-        data_path = self.data_path()
-        mtime = os.path.getmtime(data_path)
+        mtime = os.path.getmtime(config.files.data)
 
         if mtime != self.last_edit:
             self.data = None
-            self.data = alist.read(data_path)
+            self.data = alist.read(config.files.data)
             self.last_edit = mtime
 
         fsize = os.path.getsize(file.name)
@@ -43,13 +43,12 @@ class worker (object):
     def fetch_work (self, file, num_tasks):
         found = []
         reason = []
-        has_work = False
+        busy = []
 
         with mmap.mmap(file.fileno(), 0) as mem:
-            found.extend(util.iter_free(mem, limit = num_tasks))
-            reason = [ ( "free", 0 ) ] * len(found)
-
-            for start, end in found:
+            for start, end in util.iter_free(mem, limit = num_tasks):
+                reason.append(( "free", 0 ))
+                found.append(start // config.one_size)
                 mem[ start + 1 : end ] = self.id_bytes
 
             if len(found) < num_tasks:
@@ -71,43 +70,38 @@ class worker (object):
                                     rea = "dead"
 
                             except flock.LockedException:
-                                has_work = True
+                                busy.append(( start // config.one_size, oth ))
 
                     if add:
-                        found.append(( start, end ))
+                        found.append(start // config.one_size)
                         reason.append(( rea, oth ))
 
                         if len(found) >= num_tasks:
                             break
 
-        has_work |= bool(found)
-        return [ f[0] // config.one_size for f in found ], reason, has_work
+        return found, reason, busy
 
     def get_work (self, num_tasks):
-        done_path = self.done_path()
-        alist.mkfile(done_path)
-        work = []
-        has_work = False
+        alist.mkfile(config.files.done)
+        found = []
+        busy = []
 
-        with open(done_path, "rb+") as file:
+        with open(config.files.done, "rb+") as file:
             with flock.flock(file):
                 self.fix_size(file)
 
-                work, reason, has_work = self.fetch_work(file, num_tasks)
+                found, reason, busy = self.fetch_work(file, num_tasks)
 
-                if work:
+                if found:
                     alist.commit(file)
 
-        return work, reason, has_work
+        return found, reason, busy
 
-    def __init__ (self, folder):
-        self.folder = folder
+    def __init__ (self):
         self.last_edit = None
+        alist.mkfile(config.files.wid)
 
-        wid_file = os.path.join(self.folder, config.wid_fname)
-        alist.mkfile(wid_file)
-
-        with open(wid_file, "rb+") as file:
+        with open(config.files.wid, "rb+") as file:
             with flock.flock(file):
                 file.seek(0, os.SEEK_SET)
                 data = file.read(config.use_bytes)
@@ -119,50 +113,51 @@ class worker (object):
                 alist.commit(file)
 
     def mark_done (self, pos):
-        with open(self.done_path(), "rb+") as file:
-            file.seek(pos * config.one_size + 1, os.SEEK_SET)
-            file.write(config.done)
+        with open(config.files.done, "rb+") as file:
+            with mmap.mmap(file.fileno(), 0) as mem:
+                fpos = pos * config.one_size
+                mem[ fpos : fpos + config.one_size ] = config.sep_done
 
     def work (
         self, task, *, num_tasks = config.num_tasks,
-        begin = _no_op, fetch = _no_op, wait = _default_wait, end = _no_op,
+        begin = _no_op, starve = _no_op, fetch = _no_op,
+        wait = _default_wait, end = _no_op,
         targs = (), tkwargs = {}, bargs = (), bkwargs = {},
-        fargs = (), fkwargs = {}, wargs = (), wkwargs = {},
-        eargs = (), ekwargs = {}
+        sargs = (), skwargs = {}, fargs = (), fkwargs = {},
+        wargs = (), wkwargs = {}, eargs = (), ekwargs = {}
     ):
         lock_path = self.lock_path(self.id)
         alist.mkfile(lock_path)
 
+        starve_func = lambda amount: starve(self, amount, *sargs, **skwargs)
+        starve_check = starvation.checker(starve_func, config.time_starve)
+
         with open(lock_path, "rb+") as file:
-            begin(self, *bargs, **bkwargs)
-
             with flock.flock(file):
+                begin(self, *bargs, **bkwargs)
+                found = reason = busy = None
+
                 while True:
-                    indices, reason, has_work = self.get_work(num_tasks)
+                    with starve_check:
+                        found, reason, busy = self.get_work(num_tasks)
 
-                    if not indices:
-                        if has_work:
-                            wait(self, *wargs, **wkwargs)
-                            continue
+                    if not found:
+                        if not busy:
+                            break
 
-                        break
+                        wait(self, busy, *wargs, **wkwargs)
+                        continue
 
-                    fetch(self, indices, reason, *fargs, **fkwargs)
+                    fetch(self, found, reason, *fargs, **fkwargs)
 
-                    for pos in indices:
+                    for pos in found:
                         task(self, self.data[pos], pos, *targs, **tkwargs)
                         self.mark_done(pos)
 
             end(self, *eargs, **ekwargs)
 
-    def done_path (self):
-        return os.path.join(self.folder, config.don_fname)
-
     def lock_path (self, wid):
-        return os.path.join(self.folder, config.lock_path, str(wid))
-
-    def data_path (self):
-        return os.path.join(self.folder, config.dat_fname)
+        return os.path.join(config.paths.lock, str(wid))
 
     @property
     def id_bytes (self):
