@@ -70,7 +70,7 @@ def main ():
         ( "-param4"  , "a 1 1.0" ),
         ( "-param5"  , config.ENABLE ),
         ( "-param6"  , "fixed" ),
-        ( "-param7=" , "1" )
+        ( "-param7"  , "1" )
     ]
 
     config.tests = [(
@@ -79,14 +79,14 @@ def main ():
         ( "-param3"  , [ 1.0, 1.1, 1.2, 1.3, 1.4 ] ),
         ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
         ( "-param5"  , [ config.ENABLE, config.DISABLE ] ),
-        ( "-param7=" , [ "1", "2", "3" ] ),
+        ( "-param7"  , [ "1", "2", "3" ] ),
     ), (
         ( "param1"   , [ "e", "f", "g", "h" ] ),
         ( "-param2"  , [ 1, 2, 3, 4, 5 ] ),
         ( "-param3"  , [ 1.0, 1.5, 2.0, 2.5, 3.0 ] ),
         ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
         ( "-param5"  , [ config.ENABLE, config.DISABLE ] ),
-        ( "-param7=" , [ "1", "2", "4" ] ),
+        ( "-param7"  , [ "1", "2", "4" ] ),
     )]
 
     eval_path = os.path.join(dirname, "evals")
@@ -112,23 +112,24 @@ def main ():
     try:
         prog.join()
 
-        wqueue.put(True)
-        wat.join()
-
         for wrk in workers:
             wrk.join()
 
+        wqueue.put(True)
+        wat.join()
+
     except KeyboardInterrupt:
+        print()
         pass
 
     finally:
         prog.terminate()
 
-        wqueue.put(True)
-        wat.join()
-
         for wrk in workers:
             wrk.terminate()
+
+        wqueue.put(True)
+        wat.join()
 
         print("test saved to", dirname)
 

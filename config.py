@@ -13,8 +13,8 @@ num_tasks = 50
 time_wait = 15
 time_starve = 15
 
-max_busy = 5
-max_recv = 5
+max_busy = 15
+max_recv = 15
 
 unique_busy = True
 
@@ -33,7 +33,7 @@ defaults = [
     ( "-param4"  , "a 1 1.0" ),
     ( "-param5"  , ENABLE ),
     ( "-param6"  , "fixed" ),
-    ( "-param7=" , "1" )
+    ( "-param7"  , "1" )
 ]
 
 tests = [(
@@ -42,14 +42,14 @@ tests = [(
     ( "-param3"  , [ 1.0, 1.1, 1.2, 1.3, 1.4 ] ),
     ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
     ( "-param5"  , [ ENABLE, DISABLE ] ),
-    ( "-param7=" , [ "1", "2", "3" ] ),
+    ( "-param7"  , [ "1", "2", "3" ] ),
 ), (
     ( "param1"   , [ "e", "f", "g", "h" ] ),
     ( "-param2"  , [ 1, 2, 3, 4, 5 ] ),
     ( "-param3"  , [ 1.0, 1.5, 2.0, 2.5, 3.0 ] ),
     ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
     ( "-param5"  , [ ENABLE, DISABLE ] ),
-    ( "-param7=" , [ "1", "2", "4" ] ),
+    ( "-param7"  , [ "1", "2", "4" ] ),
 )]
 
 def ignore (flags):
@@ -62,8 +62,8 @@ def preprocess (key, val):
     pass
 
 def log_format (key, val):
-    if key[-1] == "=":
-        yield "{}{}".format(key, val)
+    if key == "-param7":
+        yield "{}={}".format(key, val)
 
     elif val is ENABLE:
         yield key
@@ -76,8 +76,8 @@ def log_format (key, val):
 
 def param_format (key, val):
     if val is not DISABLE:
-        if key[-1] == "=":
-            yield "{}{}".format(key, val)
+        if key == "-param7":
+            yield "{}={}".format(key, val)
 
         else:
             if key[0] == "-":
