@@ -10,6 +10,20 @@ import flock
 import alist
 import config
 
+
+def iter_keys (defaults, tests):
+    unique = set()
+
+    for key in defaults.keys():
+        yield key
+        unique.add(key)
+
+    for test in tests:
+        for key, _ in test:
+            if key not in unique:
+                yield key
+                unique.add(key)
+
 def iter_values (defaults, tests):
     unique = {}
 
@@ -22,19 +36,6 @@ def iter_values (defaults, tests):
             for val in vals:
                 if val not in unique[key]:
                     yield key, val
-
-def iter_params (defaults, tests):
-    unique = set()
-
-    for key, val in defaults.items():
-        unique.add(key)
-        yield key, [ val ]
-
-    for test in tests:
-        for key, vals in test:
-            if key not in unique:
-                yield key, vals
-                unique.add(key)
 
 def iter_tests (defaults, tests, order):
     key = lambda x: order[x[0]]
@@ -63,7 +64,7 @@ def main (argv):
     defaults = cl.OrderedDict(config.defaults)
     order = { param : i for i, param in enumerate(defaults.keys()) }
 
-    for key, _ in iter_params(defaults, config.tests):
+    for key in iter_keys(defaults, config.tests):
         if key in defaults:
             continue
 
