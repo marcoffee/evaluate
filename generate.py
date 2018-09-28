@@ -54,7 +54,7 @@ def iter_tests (defaults, tests, order):
 
             yield tuple(flags.items())
 
-argparser = argparse.ArgumentParser()
+argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
 argparser.add_argument("-clear", action = "store_true")
 argparser.add_argument("-release-tasks", action = "store_true")
 argparser.add_argument("-no-warnings", action = "store_false", dest = "warnings")

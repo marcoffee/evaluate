@@ -31,7 +31,7 @@ def sec_to_str (sec):
 
     return result
 
-argparser = argparse.ArgumentParser()
+argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
 
 argparser.add_argument("-refresh", type = float, default = 1.0)
 argparser.add_argument("-report", action = "store_true")

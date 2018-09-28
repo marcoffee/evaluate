@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import re
 import sys
 import time
@@ -129,7 +130,7 @@ def watch (
     curses.wrapper(window, func, refresh, time_fmt, brk, run_until, command)
 
 def main (argv):
-    argparser = argparse.ArgumentParser()
+    argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
     argparser.add_argument("command")
     argparser.add_argument("-n", type = float, default = 1.0)
     argparser.add_argument("-no-break", action = "store_false", dest = "brk")
