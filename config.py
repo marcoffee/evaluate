@@ -13,7 +13,7 @@ num_tasks = 50
 time_wait = 15
 time_starve = 15
 
-max_busy = 15
+max_busy = 5
 max_recv = 15
 
 unique_busy = True
