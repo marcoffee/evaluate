@@ -6,6 +6,7 @@ import time
 import curses
 import argparse
 import datetime
+import traceback
 import subprocess
 
 
@@ -83,7 +84,10 @@ def window (scr, func, refresh, time_fmt, brk, run_until, command):
         ts = " [ {} ]".format(now.strftime(time_fmt))
         cprint(scr, 0, x - len(ts), y, x, ts, brk = False)
 
-        out = func()
+        try:
+            out = func()
+        except:
+            out = traceback.format_exc()
 
         py = 2
         px = 0
