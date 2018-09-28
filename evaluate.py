@@ -80,33 +80,38 @@ def beautify (data):
 def bold (txt):
     return "\033[1m{}\033[0m".format(txt)
 
-def format_reason (tid, rea, rid):
-    fmt = ""
+def color_reason (tid, rea):
+    fmt = "{}"
 
     if rea == "free":
-        fmt = "\033[38;5;{}m{{0}}\033[0m".format(config.recv_free)
+        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_free)
 
     elif rea == "mine":
-        fmt = "\033[38;5;{}m{{0}}\033[0m".format(config.recv_mine)
+        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_mine)
 
-    else:
-        fmt = "{{1}} <- \033[38;5;{}m{{0}}\033[0m".format(config.recv_dead)
+    elif rea == "dead":
+        fmt = "\033[38;5;{}m{{}}\033[0m".format(config.recv_dead)
 
-    return fmt.format(tid, bold(rid))
+    return fmt.format(tid)
+
+def format_reason (tid, rea, wid):
+    result = color_reason(tid, rea)
+
+    if rea == "dead":
+        result = "{} <- {}".format(bold(wid), result)
+
+    return result
 
 def begin (worker, *, aqueue):
-    bold_id = bold(worker.id)
-    aprint(bold_id, "began", aqueue = aqueue)
+    aprint(bold(worker.id), "began", aqueue = aqueue)
 
 def starve (worker, amount, *, aqueue):
-    bold_id = bold(worker.id)
-    aprint(bold_id, "is starving", "#{}".format(amount), aqueue = aqueue)
+    aprint(bold(worker.id), "is starving", "#{}".format(amount), aqueue = aqueue)
 
 def fetch (worker, ids, reason, *, aqueue):
-    bold_id = bold(worker.id)
     printed = []
 
-    aprint(bold_id, "recv", aqueue = aqueue, end = " ")
+    aprint(bold(worker.id), "recv", aqueue = aqueue, end = " ")
 
     for tid, ( rea, rid ) in zip(ids, reason):
         printed.append(format_reason(tid, rea, rid))
@@ -122,25 +127,23 @@ def fetch (worker, ids, reason, *, aqueue):
 
     aprint(ts = False, aqueue = aqueue)
 
-def task (worker, data, pos, *, aqueue):
-    bold_id = bold(worker.id)
+def task (worker, data, pos, rea, *, aqueue):
     beau = beautify(data)
     data = cl.OrderedDict(data)
 
-    aprint(bold_id, "task", pos, "=>", beau, aqueue = aqueue)
+    aprint(bold(worker.id), "task", pos, "=>", beau, aqueue = aqueue)
 
     start = time.time()
     config.run(worker.id, data, pos)
     runtime = "({})".format(get_rt(time.time() - start))
 
-    aprint(bold_id, "done", pos, "=>", beau, runtime, aqueue = aqueue)
+    aprint(bold(worker.id), "done", pos, "=>", beau, runtime, aqueue = aqueue)
 
 def wait (worker, busy, *, aqueue):
-    bold_id = bold(worker.id)
     printed = []
     unique = set()
 
-    aprint(bold_id, "wait", "{}s:".format(config.time_wait),
+    aprint(bold(worker.id), "wait", "{}s:".format(config.time_wait),
            "found", aqueue = aqueue, end = " ")
 
     for bid, wid in busy:
@@ -161,8 +164,7 @@ def wait (worker, busy, *, aqueue):
     time.sleep(config.time_wait)
 
 def end (worker, *, aqueue):
-    bold_id = bold(worker.id)
-    aprint(bold_id, "end", aqueue = aqueue)
+    aprint(bold(worker.id), "end", aqueue = aqueue)
 
 def main (argv):
     aqueue = queue.Queue()
