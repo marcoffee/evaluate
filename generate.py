@@ -2,6 +2,7 @@
 
 import os
 import sys
+import struct
 import argparse
 import itertools as it
 import collections as cl
@@ -83,7 +84,17 @@ def main (argv):
     os.makedirs(config.paths.lock, exist_ok = True)
 
     alist.mkfile(config.files.wid, config.files.done,
-                 config.files.data, config.files.log)
+                 config.files.data, config.files.log, config.files.progress)
+
+    with open(config.files.progress, "rb+") as file:
+        try:
+            with flock.flock(file, block = False):
+                file.seek(0, os.SEEK_SET)
+                zeros = b"\x00" * struct.calcsize(config.pro_format)
+                file.write(zeros)
+
+        except flock.LockedException:
+            pass
 
     o_type = "wb+" if args.clear else "rb+"
 
