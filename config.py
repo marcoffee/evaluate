@@ -30,7 +30,7 @@ defaults = [
     ( "param1"   , "a" ),
     ( "-param2"  , 1 ),
     ( "-param3"  , 1.0 ),
-    ( "-param4"  , "a 1 1.0" ),
+    ( "-param4"  , [ "a", 1, 1.0 ] ),
     ( "-param5"  , ENABLE ),
     ( "-param6"  , "fixed" ),
     ( "-param7"  , "1" )
@@ -40,14 +40,14 @@ tests = [(
     ( "param1"   , [ "a", "b", "c", "d", "e" ] ),
     ( "-param2"  , [ 1, 2, 3, 4, 5 ] ),
     ( "-param3"  , [ 1.0, 1.1, 1.2, 1.3, 1.4 ] ),
-    ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
+    ( "-param4"  , [ [ 1, 2, 3 ], [ "a", "b", "c" ], [ 1, "a", False ] ] ),
     ( "-param5"  , [ ENABLE, DISABLE ] ),
     ( "-param7"  , [ "1", "2", "3" ] ),
 ), (
     ( "param1"   , [ "e", "f", "g", "h" ] ),
     ( "-param2"  , [ 1, 2, 3, 4, 5 ] ),
     ( "-param3"  , [ 1.0, 1.5, 2.0, 2.5, 3.0 ] ),
-    ( "-param4"  , [ "1 2 3", "a b c", "1 a bla" ] ),
+    ( "-param4"  , [ [ 1, 2, 3 ], [ "a", "b", "c" ], [ 1, "a", True ] ] ),
     ( "-param5"  , [ ENABLE, DISABLE ] ),
     ( "-param7"  , [ "1", "2", "4" ] ),
 )]
@@ -83,13 +83,16 @@ def param_format (key, val):
             if key[0] == "-":
                 yield key
 
-            if val is not ENABLE:
+            if isinstance(val, list):
+                for v in val:
+                    yield str(v)
+
+            elif val is not ENABLE:
                 yield str(val)
 
 def run (wid, data, pos):
     print(*(
-        param for key, val in data.items()
-            for param in param_format(key, val)
+        param for key, val in data.items() for param in param_format(key, val)
     ))
 
     time.sleep(0.1)
