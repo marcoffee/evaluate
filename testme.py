@@ -3,6 +3,7 @@
 import io
 import os
 import sys
+import time
 import queue
 import shutil
 import tempfile
@@ -35,13 +36,14 @@ def progress_thread ():
 
 def watch_function ():
     prog = progress.main([ "-report", "-no-print" ])
+
     tail = subprocess.run(
         [ "tail", "-n", "20", config.files.log ],
         stdout = subprocess.PIPE, stderr = subprocess.STDOUT,
         universal_newlines = True
-    )
+    ).stdout
 
-    return "{}\n\n{}".format(prog, tail.stdout)
+    return "{}\n\n{}".format(prog, tail)
 
 def watch_stop (wqueue):
     def func ():
@@ -104,7 +106,7 @@ def main ():
     wat = threading.Thread(target = watch_thread, args = ( wqueue, ))
     wat.start()
 
-    for i in range(4):
+    for i in range(100):
         wrk = mp.Process(target = evaluate_thread, args = ( eval_path, i ))
         wrk.start()
         workers.append(wrk)
@@ -114,6 +116,8 @@ def main ():
 
         for wrk in workers:
             wrk.join()
+
+        time.sleep(1)
 
         wqueue.put(True)
         wat.join()
