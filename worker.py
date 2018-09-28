@@ -3,6 +3,7 @@
 import os
 import mmap
 import time
+import itertools as it
 
 import alist
 import flock
@@ -128,6 +129,7 @@ class worker (object):
     ):
         lock_path = self.lock_path(self.id)
         alist.mkfile(lock_path)
+        done = []
 
         starve_func = lambda amount: starve(self, amount, *sargs, **skwargs)
         starve_check = starvation.checker(starve_func, config.time_starve)
@@ -150,8 +152,16 @@ class worker (object):
 
                     fetch(self, found, reason, *fargs, **fkwargs)
 
-                    for pos in found:
-                        task(self, self.data[pos], pos, *targs, **tkwargs)
+                    if len(self.data) > len(done):
+                        diff = len(self.data) - len(done)
+                        done.extend(it.repeat(False, diff))
+
+                    for pos, rea in zip(found, reason):
+                        if not done[pos]:
+                            data = self.data[pos]
+                            task(self, data, pos, rea, *targs, **tkwargs)
+                            done[pos] = True
+
                         self.mark_done(pos)
 
             end(self, *eargs, **ekwargs)
@@ -162,42 +172,3 @@ class worker (object):
     @property
     def id_bytes (self):
         return self.id.to_bytes(config.use_bytes, config.use_order)
-
-
-if __name__ == "__main__":
-
-    import tempfile
-    import multiprocessing as mp
-
-
-    threads = 100
-
-    def test (dirname):
-
-        def work (worker, data, pos):
-            print(wrk.id, "got", pos, "=", data)
-            time.sleep((5 * wrk.id) / threads)
-            print(wrk.id, "done", pos)
-
-        def begin (wrk):
-            print(wrk.id, "is begining")
-
-        def wait (wrk):
-            print(wrk.id, "is waiting 1s")
-            time.sleep(1)
-
-        def end (wrk):
-            print(wrk.id, "is ending")
-
-        wrk = worker(dirname)
-        wrk.work(work, num_tasks = 1, begin = begin, wait = wait, end = end)
-
-    dirname = tempfile.mkdtemp()
-    alist.write(os.path.join(dirname, "queue"), *range(20))
-
-    print("starting test")
-
-    with mp.Pool(threads) as p:
-        p.map(test, [ dirname ] * threads)
-
-    print("ending test")
