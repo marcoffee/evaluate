@@ -50,7 +50,7 @@ def iter_tests (defaults, tests, order):
             flags = cl.OrderedDict(sorted(flags.items(), key = key))
 
             for exp in config.expand(flags):
-                yield exp.items()
+                yield tuple(exp.items())
 
 argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
 argparser.add_argument("-clear", action = "store_true")
