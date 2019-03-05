@@ -18,7 +18,7 @@ def sec_to_str (sec):
     hours, sec = divmod(sec, 3600)
     minutes, sec = divmod(sec, 60)
 
-    result = "{:>08.5f}".format(sec)
+    result = "{:>08.5f}s".format(sec)
 
     if minutes or hours or days:
         result = "{:>02.0f}:{}".format(minutes, result)
@@ -31,11 +31,11 @@ def sec_to_str (sec):
 
     return result
 
-argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
+argparser = argparse.ArgumentParser(prog=os.path.basename(__file__))
 
-argparser.add_argument("-refresh", type = float, default = 1.0)
-argparser.add_argument("-report", action = "store_true")
-argparser.add_argument("-no-print", action = "store_false", dest = "print")
+argparser.add_argument("-refresh", type=float, default=1.0)
+argparser.add_argument("-report", action="store_true")
+argparser.add_argument("-no-print", action="store_false", dest="print")
 
 def main (argv):
     args = argparser.parse_args(argv)
@@ -74,7 +74,7 @@ def main (argv):
     with open(config.files.done, "rb") as done, \
          open(config.files.progress, "wb+") as prog:
 
-        with flock.flock(prog, block = False):
+        with flock.flock(prog, block=False):
             try:
                 while True:
                     count = first_work // config.one_size
@@ -82,11 +82,11 @@ def main (argv):
                     total = fsize // config.one_size
                     done_fn = done.fileno()
 
-                    with mmap.mmap(done_fn, 0, access = mem_access) as mem:
+                    with mmap.mmap(done_fn, 0, access=mem_access) as mem:
                         prev = first_work
                         found_work = False
 
-                        for s, e in util.iter_done(mem, start = first_work):
+                        for s, e in util.iter_done(mem, start=first_work):
                             count += 1
 
                             if not found_work:

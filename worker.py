@@ -47,7 +47,7 @@ class worker (object):
         busy = []
 
         with mmap.mmap(file.fileno(), 0) as mem:
-            for start, end in util.iter_free(mem, limit = num_tasks):
+            for start, end in util.iter_free(mem, limit=num_tasks):
                 reason.append(( "free", 0 ))
                 found.append(start // config.one_size)
                 mem[ start + 1 : end ] = self.id_bytes
@@ -65,7 +65,7 @@ class worker (object):
 
                         with open(oth_path, "rb+") as oth_file:
                             try:
-                                with flock.flock(oth_file, block = False):
+                                with flock.flock(oth_file, block=False):
                                     mem[ start + 1 : end ] = self.id_bytes
                                     add = True
                                     rea = "dead"

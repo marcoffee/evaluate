@@ -16,7 +16,7 @@ import config
 import worker
 
 
-def get_many (aqueue, block_first = False):
+def get_many (aqueue, block_first=False):
     if block_first:
         yield aqueue.get()
 
@@ -52,7 +52,7 @@ def async_printer (fname, aqueue):
                     log.seek(0, os.SEEK_END)
 
                     for args, kwargs in buffer:
-                        print(*args, **kwargs, file = log)
+                        print(*args, **kwargs, file=log)
 
                     alist.commit(log)
 
@@ -62,7 +62,7 @@ def get_ts ():
 def get_rt (val):
     return datetime.datetime.utcfromtimestamp(val).strftime(config.rt_format)
 
-def aprint (*args, aqueue, ts = True, **kwargs):
+def aprint (*args, aqueue, ts=True, **kwargs):
     if ts:
         args = ( "[{}]".format(get_ts()), *args )
 
@@ -103,15 +103,15 @@ def format_reason (tid, rea, wid):
     return result
 
 def begin (worker, *, aqueue):
-    aprint(bold(worker.id), "began", aqueue = aqueue)
+    aprint(bold(worker.id), "began", aqueue=aqueue)
 
 def starve (worker, amount, *, aqueue):
-    aprint(bold(worker.id), "is starving", "#{}".format(amount), aqueue = aqueue)
+    aprint(bold(worker.id), "is starving", "#{}".format(amount), aqueue=aqueue)
 
 def fetch (worker, ids, reason, *, aqueue):
     printed = []
 
-    aprint(bold(worker.id), "recv", aqueue = aqueue, end = " ")
+    aprint(bold(worker.id), "recv", aqueue=aqueue, end=" ")
 
     for tid, ( rea, rid ) in zip(ids, reason):
         printed.append(format_reason(tid, rea, rid))
@@ -119,32 +119,32 @@ def fetch (worker, ids, reason, *, aqueue):
         if len(printed) >= config.max_recv:
             break
 
-    aprint(*printed, ts = False, sep = ", ", aqueue = aqueue, end = " ")
+    aprint(*printed, ts=False, sep=", ", aqueue=aqueue, end=" ")
 
     if len(ids) > len(printed):
         diff = "... +{}".format(len(ids) - len(printed))
-        aprint(diff, "tasks", ts = False, aqueue = aqueue, end = "")
+        aprint(diff, "tasks", ts=False, aqueue=aqueue, end="")
 
-    aprint(ts = False, aqueue = aqueue)
+    aprint(ts=False, aqueue=aqueue)
 
 def task (worker, data, pos, rea, *, aqueue):
     beau = beautify(data)
     data = cl.OrderedDict(data)
 
-    aprint(bold(worker.id), "task", pos, "=>", beau, aqueue = aqueue)
+    aprint(bold(worker.id), "task", pos, "=>", beau, aqueue=aqueue)
 
     start = time.time()
     config.run(worker.id, data, pos)
     runtime = "({})".format(get_rt(time.time() - start))
 
-    aprint(bold(worker.id), "done", pos, "=>", beau, runtime, aqueue = aqueue)
+    aprint(bold(worker.id), "done", pos, "=>", beau, runtime, aqueue=aqueue)
 
 def wait (worker, busy, *, aqueue):
     printed = []
     unique = set()
 
     aprint(bold(worker.id), "wait", "{}s:".format(config.time_wait),
-           "found", aqueue = aqueue, end = " ")
+           "found", aqueue=aqueue, end=" ")
 
     for bid, wid in busy:
         if not config.unique_busy or wid not in unique:
@@ -154,22 +154,22 @@ def wait (worker, busy, *, aqueue):
             if len(printed) >= config.max_busy:
                 break
 
-    aprint(*printed, ts = False, aqueue = aqueue, end = " ", sep = ", ")
+    aprint(*printed, ts=False, aqueue=aqueue, end=" ", sep=", ")
 
     if len(busy) > len(printed):
         diff = "... +{}".format(len(busy) - len(printed))
-        aprint(diff, ts = False, aqueue = aqueue, end = " ")
+        aprint(diff, ts=False, aqueue=aqueue, end=" ")
 
-    aprint("busy", ts = False, aqueue = aqueue)
+    aprint("busy", ts=False, aqueue=aqueue)
     time.sleep(config.time_wait)
 
 def end (worker, *, aqueue):
-    aprint(bold(worker.id), "end", aqueue = aqueue)
+    aprint(bold(worker.id), "end", aqueue=aqueue)
 
 def main (argv):
     aqueue = queue.Queue()
 
-    logger = threading.Thread(target = async_printer, kwargs = {
+    logger = threading.Thread(target=async_printer, kwargs={
         "fname": config.files.log, "aqueue": aqueue
     })
 
@@ -177,15 +177,15 @@ def main (argv):
     wrk = worker.worker()
 
     try:
-        wrk.work(task, num_tasks = config.num_tasks,
-                 begin = begin, starve = starve,
-                 fetch = fetch, wait = wait, end = end,
-                 tkwargs = { "aqueue": aqueue },
-                 bkwargs = { "aqueue": aqueue },
-                 skwargs = { "aqueue": aqueue },
-                 fkwargs = { "aqueue": aqueue },
-                 wkwargs = { "aqueue": aqueue },
-                 ekwargs = { "aqueue": aqueue })
+        wrk.work(task, num_tasks=config.num_tasks,
+                 begin=begin, starve=starve,
+                 fetch=fetch, wait=wait, end=end,
+                 tkwargs={ "aqueue": aqueue },
+                 bkwargs={ "aqueue": aqueue },
+                 skwargs={ "aqueue": aqueue },
+                 fkwargs={ "aqueue": aqueue },
+                 wkwargs={ "aqueue": aqueue },
+                 ekwargs={ "aqueue": aqueue })
 
     except KeyboardInterrupt:
         pass

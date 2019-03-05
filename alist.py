@@ -6,7 +6,7 @@ import flock
 def mkfile (*names):
     for fname in map(os.path.realpath, names):
         if not os.path.exists(fname):
-            os.makedirs(os.path.dirname(fname), exist_ok = True)
+            os.makedirs(os.path.dirname(fname), exist_ok=True)
             open(fname, "a").close()
 
 def commit (file):
@@ -21,9 +21,9 @@ def iterate_locked (file):
         except EOFError:
             break
 
-def iterate (fname, shared = True):
+def iterate (fname, shared=True):
     with open(fname, "rb") as file:
-        with flock.flock(file, shared = shared):
+        with flock.flock(file, shared=shared):
             yield from iterate_locked(file)
 
 def read_locked (file):
@@ -38,17 +38,17 @@ def read_locked (file):
 
     return result
 
-def read (fname, shared = True):
+def read (fname, shared=True):
     result = None
 
     with open(fname, "rb") as file:
-        with flock.flock(file, shared = shared):
+        with flock.flock(file, shared=shared):
             file.seek(0, os.SEEK_SET)
             result = read_locked(file)
 
     return result
 
-def write_locked (file, *data, flush = True):
+def write_locked (file, *data, flush=True):
     for value in data:
         pickle.dump(value, file)
 
@@ -57,7 +57,7 @@ def write_locked (file, *data, flush = True):
 
     return len(data)
 
-def write (fname, *data, create = True):
+def write (fname, *data, create=True):
     written = 0
 
     if create:

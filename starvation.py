@@ -15,7 +15,7 @@ def check_thread (wait, aqueue, func):
 
         while value is command.START:
             try:
-                value = aqueue.get(timeout = wait)
+                value = aqueue.get(timeout=wait)
             except queue.Empty:
                 func(amount)
                 amount += 1
@@ -30,7 +30,7 @@ class checker (object):
     def __init__ (self, func, wait):
         self.aqueue = queue.Queue()
 
-        self.thread = threading.Thread(target = check_thread, kwargs = {
+        self.thread = threading.Thread(target=check_thread, kwargs={
             "wait": wait, "aqueue": self.aqueue, "func": func
         })
 

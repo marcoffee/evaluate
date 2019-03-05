@@ -59,10 +59,10 @@ def watch_stop (wqueue):
     return func
 
 def watch_thread (wqueue):
-    watch.watch(watch_function, run_until = watch_stop(wqueue))
+    watch.watch(watch_function, run_until=watch_stop(wqueue))
 
 def main ():
-    dirname = tempfile.mkdtemp(prefix = "test_", dir = ".")
+    dirname = tempfile.mkdtemp(prefix="test_", dir=".")
     config.set_task_path(dirname)
 
     config.defaults = [
@@ -92,22 +92,22 @@ def main ():
     )]
 
     eval_path = os.path.join(dirname, "evals")
-    os.makedirs(eval_path, exist_ok = True)
+    os.makedirs(eval_path, exist_ok=True)
 
     workers = []
 
     generate.main([])
 
-    prog = mp.Process(target = progress_thread)
+    prog = mp.Process(target=progress_thread)
     prog.start()
 
     wqueue = queue.Queue()
 
-    wat = threading.Thread(target = watch_thread, args = ( wqueue, ))
+    wat = threading.Thread(target=watch_thread, args=( wqueue, ))
     wat.start()
 
     for i in range(100):
-        wrk = mp.Process(target = evaluate_thread, args = ( eval_path, i ))
+        wrk = mp.Process(target=evaluate_thread, args=( eval_path, i ))
         wrk.start()
         workers.append(wrk)
 

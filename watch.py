@@ -14,7 +14,7 @@ import subprocess
 def run_forever ():
     return False
 
-def cprint (scr, py, px, y, x, dat, attr = curses.A_NORMAL, brk = False):
+def cprint (scr, py, px, y, x, dat, attr=curses.A_NORMAL, brk=False):
     if x < 0:
         dat = dat[ -x : ]
         x = 0
@@ -79,11 +79,11 @@ def window (scr, func, refresh, time_fmt, brk, run_until, command):
         if command:
             head_txt += ": {}".format(command)
 
-        cprint(scr, 0, 0, y, x, head_txt, brk = False)
+        cprint(scr, 0, 0, y, x, head_txt, brk=False)
 
         now = datetime.datetime.now()
         ts = " [ {} ]".format(now.strftime(time_fmt))
-        cprint(scr, 0, x - len(ts), y, x, ts, brk = False)
+        cprint(scr, 0, x - len(ts), y, x, ts, brk=False)
 
         try:
             out = func()
@@ -130,11 +130,11 @@ def watch (
     curses.wrapper(window, func, refresh, time_fmt, brk, run_until, command)
 
 def main (argv):
-    argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
+    argparser = argparse.ArgumentParser(prog=os.path.basename(__file__))
     argparser.add_argument("command")
-    argparser.add_argument("-n", type = float, default = 1.0)
-    argparser.add_argument("-no-break", action = "store_false", dest = "brk")
-    argparser.add_argument("-time-format", default = "%Y-%m-%d %H:%M:%S.%f")
+    argparser.add_argument("-n", type=float, default=1.0)
+    argparser.add_argument("-no-break", action="store_false", dest="brk")
+    argparser.add_argument("-time-format", default="%Y-%m-%d %H:%M:%S.%f")
 
     args = argparser.parse_args(argv)
 
@@ -145,7 +145,7 @@ def main (argv):
             universal_newlines = True
         ).stdout
 
-        watch(func, args.n, args.time_format, args.brk, command = args.command)
+        watch(func, args.n, args.time_format, args.brk, command=args.command)
 
     except KeyboardInterrupt:
         pass

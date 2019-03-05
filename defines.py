@@ -25,7 +25,7 @@ class paths_t (object):
     __slots__ = [ "task", "lock" ]
 
 class files_t (object):
-    __slots__ = [ "wid", "done", "data", "log", "progress" ]
+    __slots__ = [ "wid", "done", "data", "log", "progress", "translate" ]
 
 paths = paths_t()
 files = files_t()
@@ -42,3 +42,4 @@ def set_task_path (path):
     files.data = os.path.join(paths.task, "queue")
     files.log = os.path.join(paths.task, "log.out")
     files.progress = os.path.join(paths.task, "progress")
+    files.translate = os.path.join(paths.task, "translate")

@@ -2,6 +2,7 @@
 
 import os
 import sys
+import util
 import struct
 import argparse
 import itertools as it
@@ -47,15 +48,15 @@ def iter_tests (defaults, tests, order):
 
         for vals in it.product(*opts):
             flags = { **defaults, **dict(zip(keys, vals)) }
-            flags = cl.OrderedDict(sorted(flags.items(), key = key))
+            flags = cl.OrderedDict(sorted(flags.items(), key=key))
 
             for exp in config.expand(flags):
                 yield tuple(exp.items())
 
-argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
-argparser.add_argument("-clear", action = "store_true")
-argparser.add_argument("-release-tasks", action = "store_true")
-argparser.add_argument("-no-warnings", action = "store_false", dest = "warnings")
+argparser = argparse.ArgumentParser(prog=os.path.basename(__file__))
+argparser.add_argument("-clear", action="store_true")
+argparser.add_argument("-release-tasks", action="store_true")
+argparser.add_argument("-no-warnings", action="store_false", dest="warnings")
 
 def main (argv):
     args = argparser.parse_args(argv)
@@ -78,15 +79,16 @@ def main (argv):
     for key, val in iter_values(defaults, config.tests):
         key, val = config.preprocess(key, val)
 
-    os.makedirs(config.paths.task, exist_ok = True)
-    os.makedirs(config.paths.lock, exist_ok = True)
+    os.makedirs(config.paths.task, exist_ok=True)
+    os.makedirs(config.paths.lock, exist_ok=True)
 
     alist.mkfile(config.files.wid, config.files.done,
-                 config.files.data, config.files.log, config.files.progress)
+                 config.files.data, config.files.log,
+                 config.files.progress, config.files.translate)
 
     with open(config.files.progress, "rb+") as file:
         try:
-            with flock.flock(file, block = False):
+            with flock.flock(file, block=False):
                 file.seek(0, os.SEEK_SET)
                 zeros = b"\x00" * struct.calcsize(config.pro_format)
                 file.write(zeros)
@@ -94,10 +96,11 @@ def main (argv):
         except flock.LockedException:
             pass
 
-    o_type = "wb+" if args.clear else "rb+"
+    o_type = "w{}+" if args.clear else "r{}+"
 
-    with open(config.files.data, o_type) as queue, \
-         open(config.files.done, o_type) as done:
+    with open(config.files.data, o_type.format("b")) as queue, \
+         open(config.files.done, o_type.format("b")) as done, \
+         open(config.files.translate, o_type.format("")) as tlate:
 
         with flock.flock(queue), flock.flock(done):
             exists = set()
@@ -105,13 +108,26 @@ def main (argv):
             for task in alist.iterate_locked(queue):
                 exists.add(tuple(sorted(task)))
 
-            created = alist.write_locked(queue, *(
+            tests = [
                 ts for ts in iter_tests(defaults, config.tests, order)
                     if tuple(sorted(ts)) not in exists
-            ))
+            ]
+
+            created = alist.write_locked(queue, *tests)
+
+            tlate.seek(0, os.SEEK_END)
+
+            for ident, test in zip(it.count(len(exists)), tests):
+                print(
+                    ident, "=>", *(filter(bool,
+                        map(" ".join, util.mapstar(config.param_format, test))
+                    )),
+                    file=tlate
+                )
+
+            done.seek(0, os.SEEK_END)
 
             for _ in range(created):
-                done.seek(0, os.SEEK_END)
                 done.write(config.sep_free)
 
             if not args.clear and args.release_tasks:
