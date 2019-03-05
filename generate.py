@@ -40,7 +40,7 @@ def iter_values (defaults, tests):
                     yield key, val
 
 def iter_tests (defaults, tests, order):
-    key = lambda x: order[x[0]]
+    sort_key = lambda x: order[x[0]]
 
     for test in tests:
         keys = [ key for key, _ in test ]
@@ -48,7 +48,7 @@ def iter_tests (defaults, tests, order):
 
         for vals in it.product(*opts):
             flags = { **defaults, **dict(zip(keys, vals)) }
-            flags = cl.OrderedDict(sorted(flags.items(), key=key))
+            flags = cl.OrderedDict(sorted(flags.items(), key=sort_key))
 
             for exp in config.expand(flags):
                 yield tuple(exp.items())
