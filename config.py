@@ -52,14 +52,14 @@ tests = [(
     ( "-param7"  , [ "1", "2", "4" ] ),
 )]
 
-def ignore (flags):
+def expand (flags):
     if flags["param1"] == "e" and flags["-param5"] == DISABLE:
-        return True
+        return
 
-    return False
+    yield flags
 
 def preprocess (key, val):
-    pass
+    return key, val
 
 def log_format (key, val):
     if key == "-param7":

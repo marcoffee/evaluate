@@ -49,10 +49,8 @@ def iter_tests (defaults, tests, order):
             flags = { **defaults, **dict(zip(keys, vals)) }
             flags = cl.OrderedDict(sorted(flags.items(), key = key))
 
-            if config.ignore(flags):
-                continue
-
-            yield tuple(flags.items())
+            for exp in config.expand(flags):
+                yield exp.items()
 
 argparser = argparse.ArgumentParser(prog = os.path.basename(__file__))
 argparser.add_argument("-clear", action = "store_true")
@@ -78,7 +76,7 @@ def main (argv):
             print(warn.format(pos, key))
 
     for key, val in iter_values(defaults, config.tests):
-        config.preprocess(key, val)
+        key, val = config.preprocess(key, val)
 
     os.makedirs(config.paths.task, exist_ok = True)
     os.makedirs(config.paths.lock, exist_ok = True)
