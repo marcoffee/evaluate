@@ -4,6 +4,7 @@ import os
 import sys
 import util
 import struct
+import random
 import argparse
 import itertools as it
 import collections as cl
@@ -55,6 +56,7 @@ def iter_tests (defaults, tests, order):
 
 argparser = argparse.ArgumentParser(prog=os.path.basename(__file__))
 argparser.add_argument("-clear", action="store_true")
+argparser.add_argument("-shuffle", action="store_true")
 argparser.add_argument("-release-tasks", action="store_true")
 argparser.add_argument("-no-warnings", action="store_false", dest="warnings")
 
@@ -112,6 +114,9 @@ def main (argv):
                 ts for ts in iter_tests(defaults, config.tests, order)
                     if tuple(sorted(ts)) not in exists
             ]
+
+            if args.shuffle:
+                random.shuffle(tests, (lambda: 0.42))
 
             created = alist.write_locked(queue, *tests)
 
